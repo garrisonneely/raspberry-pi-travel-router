@@ -74,7 +74,7 @@ check_raspberry_pi() {
         log_warning "Cannot detect Raspberry Pi model"
         return
     fi
-    model=$(cat /proc/device-tree/model)
+    model=$(tr -d '\0' < /proc/device-tree/model)
     log_info "Detected: $model"
 }
 
@@ -234,11 +234,12 @@ phase4_access_point() {
     # Clean up any stale lock files from interrupted sessions
     rm -f /etc/hostapd/.hostapd.conf.swp 2>/dev/null || true
     
-    # Prompt for SSID and password
-    read -p "Enter Access Point SSID [GKTravelRouter]: " AP_SSID
+    # Prompt for SSID and password with timeout for defaults
+    log_info "Press Enter to use default values or type custom values..."
+    read -t 5 -p "Enter Access Point SSID [GKTravelRouter]: " AP_SSID || true
     AP_SSID=${AP_SSID:-GKTravelRouter}
     
-    read -p "Enter Access Point Password [CABOFUN1]: " AP_PASSWORD
+    read -t 5 -p "Enter Access Point Password [CABOFUN1]: " AP_PASSWORD || true
     AP_PASSWORD=${AP_PASSWORD:-CABOFUN1}
     
     # Validate password length
@@ -289,8 +290,6 @@ phase5_dhcp_server() {
     rm -f /etc/.dnsmasq.conf.swp 2>/dev/null || true
     
     log_info "Backing up existing dnsmasq.conf..."
-    
-    log_info "Backing up existing dnsmasq.conf..."
     mv /etc/dnsmasq.conf /etc/dnsmasq.conf.backup || true
     
     log_info "Creating dnsmasq configuration..."
@@ -329,8 +328,12 @@ phase6_wifi_client() {
         return 0
     fi
     
-    read -p "Enter WiFi network SSID to connect to: " WIFI_SSID
-    read -p "Enter WiFi network password: " WIFI_PASSWORD
+    log_info "Press Enter to use default values or type custom values..."
+    read -t 5 -p "Enter WiFi network SSID to connect to [PenthouseWiFi]: " WIFI_SSID || true
+    WIFI_SSID=${WIFI_SSID:-PenthouseWiFi}
+    
+    read -t 5 -p "Enter WiFi network password [WATERTOWER514]: " WIFI_PASSWORD || true
+    WIFI_PASSWORD=${WIFI_PASSWORD:-WATERTOWER514}
     
     log_info "Creating wpa_supplicant configuration for wlan1..."
     cat > /etc/wpa_supplicant/wpa_supplicant-wlan1.conf << EOF
@@ -385,7 +388,8 @@ phase7_vpn_setup() {
     echo "  - us9954.nordvpn.com (Denver)"
     echo "  - us10356.nordvpn.com (Denver)"
     
-    read -p "Enter NordVPN server (e.g., us9952.nordvpn.com) [us9952.nordvpn.com]: " VPN_SERVER
+    log_info "Press Enter to use default server or type custom server..."
+    read -t 5 -p "Enter NordVPN server [us9952.nordvpn.com]: " VPN_SERVER || true
     VPN_SERVER=${VPN_SERVER:-us9952.nordvpn.com}
     
     log_info "Searching for server configuration..."
@@ -403,8 +407,12 @@ phase7_vpn_setup() {
     
     log_info "Enter your NordVPN service credentials"
     log_info "(Find these in your NordVPN dashboard under 'Manual Setup')"
-    read -p "NordVPN service username: " NORD_USER
-    read -sp "NordVPN service password: " NORD_PASS
+    log_info "Press Enter to use default credentials or type custom credentials..."
+    read -t 5 -p "NordVPN service username [8x8ZuVWfXrbbbc8jTpapJ9GS]: " NORD_USER || true
+    NORD_USER=${NORD_USER:-8x8ZuVWfXrbbbc8jTpapJ9GS}
+    
+    read -t 5 -sp "NordVPN service password [****hidden****]: " NORD_PASS || true
+    NORD_PASS=${NORD_PASS:-9ifbQYEPfco2ye8RJpxco8nt}
     echo
     
     log_info "Creating credentials file..."
@@ -437,8 +445,15 @@ phase8_routing_firewall() {
     fi
     
     log_info "Enabling IP forwarding..."
-    sed -i 's/#net.ipv4.ip_forward=1/net.ipv4.ip_forward=1/' /etc/sysctl.conf || \
+    # Create sysctl.conf if it doesn't exist
+    touch /etc/sysctl.conf
+    
+    # Enable IP forwarding
+    if grep -q "^net.ipv4.ip_forward" /etc/sysctl.conf; then
+        sed -i 's/^#*net.ipv4.ip_forward.*/net.ipv4.ip_forward=1/' /etc/sysctl.conf
+    else
         echo 'net.ipv4.ip_forward=1' >> /etc/sysctl.conf
+    fi
     sysctl -p
     
     log_info "Configuring iptables rules..."
@@ -570,7 +585,12 @@ phase11_start_services() {
     rfkill unblock all
     
     log_info "Restarting dhcpcd..."
-    systemctl restart dhcpcd
+    if systemctl list-unit-files | grep -q dhcpcd; then
+        systemctl restart dhcpcd
+    else
+        log_warning "dhcpcd service not found, using NetworkManager or systemd-networkd"
+        systemctl restart NetworkManager 2>/dev/null || systemctl restart systemd-networkd 2>/dev/null || true
+    fi
     sleep 3
     
     log_info "Starting hostapd..."
