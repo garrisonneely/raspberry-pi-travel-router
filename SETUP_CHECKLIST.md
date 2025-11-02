@@ -99,6 +99,12 @@ Write down the following (keep secure):
 - [ ] Confirm to continue installation
 - [ ] Wait for Phase 1: System Preparation
 - [ ] Wait for Phase 2: WiFi Driver (15-20 minutes)
+- [ ] **System will reboot automatically after driver installation**
+- [ ] Wait 1-2 minutes for reboot
+- [ ] Reconnect via SSH: `ssh pi@raspberrypi.local`
+- [ ] Navigate back: `cd ~/raspberry-pi-travel-router`
+- [ ] Re-run installation: `sudo bash scripts/install.sh`
+- [ ] Script continues from Phase 3 automatically
 - [ ] Provide Access Point SSID when prompted
 - [ ] Provide Access Point password when prompted
 - [ ] Provide WiFi SSID to connect when prompted

@@ -63,12 +63,13 @@ Internet (Hotel/Public WiFi)
 3. **Boot Pi** and connect via SSH
 4. **Get NordVPN credentials** from [my.nordaccount.com](https://my.nordaccount.com/) ([detailed guide](docs/NORDVPN_CREDENTIALS.md))
 5. **Transfer scripts** to Pi (via git clone or SCP)
-6. **Run installation**:
+5. **Run installation**:
    ```bash
    cd raspberry-pi-travel-router
    sudo bash scripts/install.sh
    ```
-7. **Connect devices** to your new secure WiFi network
+   **Note**: The installation requires one reboot after driver installation. After reboot, reconnect and re-run the script to continue.
+6. **Connect devices** to your new secure WiFi network
 8. **Verify VPN** is working at [whatismyip.com](https://www.whatismyip.com/)
 
 **Installation time**: 30-60 minutes (mostly automated)

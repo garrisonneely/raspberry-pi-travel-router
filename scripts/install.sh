@@ -200,6 +200,9 @@ phase4_access_point() {
     log_info "PHASE 4: Access Point Configuration"
     log_info "=========================================="
     
+    # Clean up any stale lock files from interrupted sessions
+    rm -f /etc/hostapd/.hostapd.conf.swp 2>/dev/null || true
+    
     # Prompt for SSID and password
     read -p "Enter Access Point SSID [GKTravelRouter]: " AP_SSID
     AP_SSID=${AP_SSID:-GKTravelRouter}
@@ -239,12 +242,15 @@ EOF
 }
 
 ###############################################################################
-# Phase 5: DHCP Server Configuration
-###############################################################################
-
 phase5_dhcp_server() {
     log_info "=========================================="
     log_info "PHASE 5: DHCP Server Configuration"
+    log_info "=========================================="
+    
+    # Clean up any stale lock files
+    rm -f /etc/.dnsmasq.conf.swp 2>/dev/null || true
+    
+    log_info "Backing up existing dnsmasq.conf..."
     log_info "=========================================="
     
     log_info "Backing up existing dnsmasq.conf..."
@@ -298,12 +304,16 @@ EOF
     chmod 600 /etc/wpa_supplicant/wpa_supplicant-wlan1.conf
     
     log_success "WiFi client configured for: $WIFI_SSID"
-}
-
-###############################################################################
-# Phase 7: VPN Configuration
-###############################################################################
-
+phase7_vpn_setup() {
+    log_info "=========================================="
+    log_info "PHASE 7: VPN Configuration"
+    log_info "=========================================="
+    
+    # Clean up any stale lock files
+    rm -f /etc/openvpn/.nordvpn.conf.swp 2>/dev/null || true
+    rm -f /etc/openvpn/.nordvpn-credentials.swp 2>/dev/null || true
+    
+    log_info "Downloading NordVPN configuration files..."
 phase7_vpn_setup() {
     log_info "=========================================="
     log_info "PHASE 7: VPN Configuration"

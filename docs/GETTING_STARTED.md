@@ -284,6 +284,8 @@ The script will:
 
 **Installation time**: 20-40 minutes (driver compilation is the longest part)
 
+**Expected reboots**: 1 reboot after driver installation (Phase 2). After reboot, reconnect via SSH and re-run the installation script - it will automatically continue from Phase 3.
+
 ### 7.4 During Installation
 
 The script will automatically handle most prompts. You'll be asked to provide:
