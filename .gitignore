@@ -53,6 +53,7 @@ env/
 Entire Setup.docx
 Wireless Config.docx
 *.pdf
+PRIVATE_CONFIG.md
 
 # Environment specific
 .env

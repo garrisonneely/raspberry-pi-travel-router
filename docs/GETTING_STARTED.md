@@ -189,11 +189,41 @@ Before running the installation, you need your NordVPN service credentials.
 
 ### 6.1 Clone or Download Repository
 
-**Option A: Using git** (if git is installed):
+**Option A: Using git** (recommended):
+
+First, install git if not already installed:
+```bash
+sudo apt install git -y
+```
+
+Then clone the repository:
 ```bash
 cd ~
-git clone https://github.com/YOUR_USERNAME/raspberry-pi-travel-router.git
+git clone https://github.com/garrisonneely/raspberry-pi-travel-router.git
 cd raspberry-pi-travel-router
+```
+
+**Note**: If this is a private repository, you'll need to authenticate. Use one of these methods:
+
+**Method 1: Personal Access Token** (recommended):
+```bash
+# When prompted for password, use your Personal Access Token instead
+# Create token at: https://github.com/settings/tokens
+git clone https://github.com/garrisonneely/raspberry-pi-travel-router.git
+```
+
+**Method 2: GitHub CLI**:
+```bash
+# Install GitHub CLI
+curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+sudo apt update
+sudo apt install gh -y
+
+# Authenticate and clone
+gh auth login
+git clone https://github.com/garrisonneely/raspberry-pi-travel-router.git
 ```
 
 **Option B: Manual transfer via SCP/WinSCP**:
