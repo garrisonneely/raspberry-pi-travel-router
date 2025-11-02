@@ -27,9 +27,24 @@ NC='\033[0m' # No Color
 LOGFILE="/var/log/travel-router-install.log"
 exec > >(tee -a "$LOGFILE") 2>&1
 
+# State file to track completed phases
+STATE_FILE="/var/lib/travel-router-install.state"
+
 ###############################################################################
 # Helper Functions
 ###############################################################################
+
+mark_phase_complete() {
+    local phase=$1
+    mkdir -p "$(dirname "$STATE_FILE")"
+    echo "$phase" >> "$STATE_FILE"
+    log_info "Marked $phase as complete"
+}
+
+is_phase_complete() {
+    local phase=$1
+    [ -f "$STATE_FILE" ] && grep -q "^$phase$" "$STATE_FILE"
+}
 
 log_info() {
     echo -e "${BLUE}[INFO]${NC} $(date '+%Y-%m-%d %H:%M:%S') - $1"
@@ -92,6 +107,7 @@ phase1_system_prep() {
         iptables iptables-persistent rfkill net-tools wireless-tools bc || \
         { log_error "Failed to install required packages"; exit 1; }
     
+    mark_phase_complete "phase1"
     log_success "PHASE 1: System Preparation - COMPLETE"
 }
 
@@ -104,9 +120,17 @@ phase2_wifi_driver() {
     log_info "PHASE 2: USB WiFi Driver Installation - BEGIN"
     log_info "=========================================="
     
-    # Check if phase 2 is already complete (driver loaded and wlan1 exists)
+    # Check if phase 2 is already complete
+    if is_phase_complete "phase2"; then
+        log_success "Phase 2 already completed (driver installed and verified)"
+        log_info "Skipping Phase 2"
+        return 0
+    fi
+    
+    # Check if driver is loaded and wlan1 exists (completed but not marked)
     if lsmod | grep -q "8812au" && ip link show wlan1 &> /dev/null; then
         log_success "Driver 8812au already loaded and wlan1 interface detected"
+        mark_phase_complete "phase2"
         log_info "Skipping Phase 2 - already complete"
         return 0
     fi
@@ -137,6 +161,7 @@ phase2_wifi_driver() {
     # The driver installation may ask to edit options - we skip this for automated setup
     echo -e "n\ny" | ./install-driver.sh || { log_error "Driver installation failed"; exit 1; }
     
+    mark_phase_complete "phase2"
     log_success "PHASE 2: USB WiFi Driver Installation - COMPLETE"
     log_warning "System will reboot to load the driver..."
     log_info "After reboot, SSH back in and re-run: sudo bash ~/raspberry-pi-travel-router/scripts/install.sh"
@@ -155,6 +180,12 @@ phase3_network_interfaces() {
     log_info "=========================================="
     log_info "PHASE 3: Network Interface Configuration - BEGIN"
     log_info "=========================================="
+    
+    if is_phase_complete "phase3"; then
+        log_success "Phase 3 already completed"
+        log_info "Skipping Phase 3"
+        return 0
+    fi
     
     log_info "Backing up existing dhcpcd.conf..."
     cp /etc/dhcpcd.conf /etc/dhcpcd.conf.backup || true
@@ -181,6 +212,7 @@ interface wlan1
     env wpa_supplicant_conf=/etc/wpa_supplicant/wpa_supplicant-wlan1.conf
 EOF
     
+    mark_phase_complete "phase3"
     log_success "PHASE 3: Network Interface Configuration - COMPLETE"
 }
 
@@ -192,6 +224,12 @@ phase4_access_point() {
     log_info "=========================================="
     log_info "PHASE 4: Access Point Configuration - BEGIN"
     log_info "=========================================="
+    
+    if is_phase_complete "phase4"; then
+        log_success "Phase 4 already completed"
+        log_info "Skipping Phase 4"
+        return 0
+    fi
     
     # Clean up any stale lock files from interrupted sessions
     rm -f /etc/hostapd/.hostapd.conf.swp 2>/dev/null || true
@@ -231,6 +269,7 @@ EOF
     sed -i 's|#DAEMON_CONF=""|DAEMON_CONF="/etc/hostapd/hostapd.conf"|' /etc/default/hostapd || true
     echo 'DAEMON_CONF="/etc/hostapd/hostapd.conf"' > /etc/default/hostapd
     
+    mark_phase_complete "phase4"
     log_success "PHASE 4: Access Point Configuration - COMPLETE (SSID: $AP_SSID)"
 }
 
@@ -240,11 +279,16 @@ phase5_dhcp_server() {
     log_info "PHASE 5: DHCP Server Configuration - BEGIN"
     log_info "=========================================="
     
+    if is_phase_complete "phase5"; then
+        log_success "Phase 5 already completed"
+        log_info "Skipping Phase 5"
+        return 0
+    fi
+    
     # Clean up any stale lock files
     rm -f /etc/.dnsmasq.conf.swp 2>/dev/null || true
     
     log_info "Backing up existing dnsmasq.conf..."
-    log_info "=========================================="
     
     log_info "Backing up existing dnsmasq.conf..."
     mv /etc/dnsmasq.conf /etc/dnsmasq.conf.backup || true
@@ -266,6 +310,7 @@ log-queries
 log-dhcp
 EOF
     
+    mark_phase_complete "phase5"
     log_success "PHASE 5: DHCP Server Configuration - COMPLETE"
 }
 
@@ -277,6 +322,12 @@ phase6_wifi_client() {
     log_info "=========================================="
     log_info "PHASE 6: WiFi Client Configuration - BEGIN"
     log_info "=========================================="
+    
+    if is_phase_complete "phase6"; then
+        log_success "Phase 6 already completed"
+        log_info "Skipping Phase 6"
+        return 0
+    fi
     
     read -p "Enter WiFi network SSID to connect to: " WIFI_SSID
     read -p "Enter WiFi network password: " WIFI_PASSWORD
@@ -296,6 +347,7 @@ EOF
     
     chmod 600 /etc/wpa_supplicant/wpa_supplicant-wlan1.conf
     
+    mark_phase_complete "phase6"
     log_success "PHASE 6: WiFi Client Configuration - COMPLETE (Network: $WIFI_SSID)"
 }
 
@@ -307,6 +359,12 @@ phase7_vpn_setup() {
     log_info "=========================================="
     log_info "PHASE 7: VPN Configuration - BEGIN"
     log_info "=========================================="
+    
+    if is_phase_complete "phase7"; then
+        log_success "Phase 7 already completed"
+        log_info "Skipping Phase 7"
+        return 0
+    fi
     
     # Clean up any stale lock files
     rm -f /etc/openvpn/.nordvpn.conf.swp 2>/dev/null || true
@@ -359,6 +417,7 @@ EOF
     log_info "Updating VPN configuration to use credentials file..."
     sed -i 's/^auth-user-pass.*/auth-user-pass \/etc\/openvpn\/nordvpn-credentials/' /etc/openvpn/nordvpn.conf
     
+    mark_phase_complete "phase7"
     log_success "PHASE 7: VPN Configuration - COMPLETE (Server: $VPN_SERVER)"
 }
 
@@ -370,6 +429,12 @@ phase8_routing_firewall() {
     log_info "=========================================="
     log_info "PHASE 8: Routing and Firewall Configuration - BEGIN"
     log_info "=========================================="
+    
+    if is_phase_complete "phase8"; then
+        log_success "Phase 8 already completed"
+        log_info "Skipping Phase 8"
+        return 0
+    fi
     
     log_info "Enabling IP forwarding..."
     sed -i 's/#net.ipv4.ip_forward=1/net.ipv4.ip_forward=1/' /etc/sysctl.conf || \
@@ -404,6 +469,7 @@ phase8_routing_firewall() {
     echo iptables-persistent iptables-persistent/autosave_v4 boolean true | debconf-set-selections
     echo iptables-persistent iptables-persistent/autosave_v6 boolean true | debconf-set-selections
     
+    mark_phase_complete "phase8"
     log_success "PHASE 8: Routing and Firewall Configuration - COMPLETE"
 }
 
@@ -415,6 +481,12 @@ phase9_startup_script() {
     log_info "=========================================="
     log_info "PHASE 9: Startup Script Configuration - BEGIN"
     log_info "=========================================="
+    
+    if is_phase_complete "phase9"; then
+        log_success "Phase 9 already completed"
+        log_info "Skipping Phase 9"
+        return 0
+    fi
     
     log_info "Creating rc.local startup script..."
     cat > /etc/rc.local << 'EOF'
@@ -442,6 +514,7 @@ EOF
     # Enable rc-local service
     systemctl enable rc-local || true
     
+    mark_phase_complete "phase9"
     log_success "PHASE 9: Startup Script Configuration - COMPLETE"
 }
 
@@ -453,6 +526,12 @@ phase10_enable_services() {
     log_info "=========================================="
     log_info "PHASE 10: Enabling Services - BEGIN"
     log_info "=========================================="
+    
+    if is_phase_complete "phase10"; then
+        log_success "Phase 10 already completed"
+        log_info "Skipping Phase 10"
+        return 0
+    fi
     
     log_info "Unmasking and enabling hostapd..."
     systemctl unmask hostapd
@@ -467,6 +546,7 @@ phase10_enable_services() {
     log_info "Enabling OpenVPN..."
     systemctl enable openvpn@nordvpn
     
+    mark_phase_complete "phase10"
     log_success "PHASE 10: Enabling Services - COMPLETE"
 }
 
@@ -478,6 +558,12 @@ phase11_start_services() {
     log_info "=========================================="
     log_info "PHASE 11: Starting Services - BEGIN"
     log_info "=========================================="
+    
+    if is_phase_complete "phase11"; then
+        log_success "Phase 11 already completed"
+        log_info "Skipping Phase 11"
+        return 0
+    fi
     
     log_info "Unblocking WiFi with rfkill..."
     rfkill unblock wifi
@@ -503,6 +589,7 @@ phase11_start_services() {
     systemctl start openvpn@nordvpn
     sleep 10
     
+    mark_phase_complete "phase11"
     log_success "PHASE 11: Starting Services - COMPLETE"
 }
 
@@ -568,11 +655,13 @@ phase12_verification() {
     
     echo ""
     if [ "$all_good" = true ]; then
+        mark_phase_complete "phase12"
         log_success "=========================================="
         log_success "PHASE 12: System Verification - COMPLETE"
         log_success "Installation Complete!"
         log_success "=========================================="
     else
+        mark_phase_complete "phase12"
         log_warning "=========================================="
         log_warning "PHASE 12: System Verification - COMPLETE (with warnings)"
         log_warning "Installation completed with warnings"
@@ -593,6 +682,21 @@ main() {
     
     check_root
     check_raspberry_pi
+    
+    # Show installation status if any phases are complete
+    if [ -f "$STATE_FILE" ]; then
+        echo ""
+        log_info "Installation Status:"
+        for i in {1..12}; do
+            if is_phase_complete "phase$i"; then
+                echo -e "  ${GREEN}✓${NC} Phase $i: Complete"
+            else
+                echo -e "  ${YELLOW}○${NC} Phase $i: Pending"
+            fi
+        done
+        echo ""
+        log_info "Resuming installation from next incomplete phase..."
+    fi
     
     echo ""
     log_warning "This script will install and configure:"
