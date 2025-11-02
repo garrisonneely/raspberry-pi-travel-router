@@ -78,7 +78,7 @@ prompt_continue() {
 
 phase1_system_prep() {
     log_info "=========================================="
-    log_info "PHASE 1: System Preparation"
+    log_info "PHASE 1: System Preparation - BEGIN"
     log_info "=========================================="
     
     log_info "Updating package lists..."
@@ -92,7 +92,7 @@ phase1_system_prep() {
         iptables iptables-persistent rfkill net-tools wireless-tools bc || \
         { log_error "Failed to install required packages"; exit 1; }
     
-    log_success "System preparation complete"
+    log_success "PHASE 1: System Preparation - COMPLETE"
 }
 
 ###############################################################################
@@ -101,7 +101,7 @@ phase1_system_prep() {
 
 phase2_wifi_driver() {
     log_info "=========================================="
-    log_info "PHASE 2: USB WiFi Driver Installation"
+    log_info "PHASE 2: USB WiFi Driver Installation - BEGIN"
     log_info "=========================================="
     
     log_info "Checking for existing driver installation..."
@@ -152,6 +152,8 @@ phase2_wifi_driver() {
         log_error "Please connect your Netgear A7000 and reboot, then re-run this script."
         exit 1
     fi
+    
+    log_success "PHASE 2: USB WiFi Driver Installation - COMPLETE"
 }
 
 ###############################################################################
@@ -160,7 +162,7 @@ phase2_wifi_driver() {
 
 phase3_network_interfaces() {
     log_info "=========================================="
-    log_info "PHASE 3: Network Interface Configuration"
+    log_info "PHASE 3: Network Interface Configuration - BEGIN"
     log_info "=========================================="
     
     log_info "Backing up existing dhcpcd.conf..."
@@ -188,7 +190,7 @@ interface wlan1
     env wpa_supplicant_conf=/etc/wpa_supplicant/wpa_supplicant-wlan1.conf
 EOF
     
-    log_success "Network interfaces configured"
+    log_success "PHASE 3: Network Interface Configuration - COMPLETE"
 }
 
 ###############################################################################
@@ -197,7 +199,7 @@ EOF
 
 phase4_access_point() {
     log_info "=========================================="
-    log_info "PHASE 4: Access Point Configuration"
+    log_info "PHASE 4: Access Point Configuration - BEGIN"
     log_info "=========================================="
     
     # Clean up any stale lock files from interrupted sessions
@@ -238,13 +240,13 @@ EOF
     sed -i 's|#DAEMON_CONF=""|DAEMON_CONF="/etc/hostapd/hostapd.conf"|' /etc/default/hostapd || true
     echo 'DAEMON_CONF="/etc/hostapd/hostapd.conf"' > /etc/default/hostapd
     
-    log_success "Access Point configured (SSID: $AP_SSID)"
+    log_success "PHASE 4: Access Point Configuration - COMPLETE (SSID: $AP_SSID)"
 }
 
 ###############################################################################
 phase5_dhcp_server() {
     log_info "=========================================="
-    log_info "PHASE 5: DHCP Server Configuration"
+    log_info "PHASE 5: DHCP Server Configuration - BEGIN"
     log_info "=========================================="
     
     # Clean up any stale lock files
@@ -273,7 +275,7 @@ log-queries
 log-dhcp
 EOF
     
-    log_success "DHCP server configured"
+    log_success "PHASE 5: DHCP Server Configuration - COMPLETE"
 }
 
 ###############################################################################
@@ -282,7 +284,7 @@ EOF
 
 phase6_wifi_client() {
     log_info "=========================================="
-    log_info "PHASE 6: WiFi Client Configuration"
+    log_info "PHASE 6: WiFi Client Configuration - BEGIN"
     log_info "=========================================="
     
     read -p "Enter WiFi network SSID to connect to: " WIFI_SSID
@@ -303,7 +305,7 @@ EOF
     
     chmod 600 /etc/wpa_supplicant/wpa_supplicant-wlan1.conf
     
-    log_success "WiFi client configured for: $WIFI_SSID"
+    log_success "PHASE 6: WiFi Client Configuration - COMPLETE (Network: $WIFI_SSID)"
 }
 
 ###############################################################################
@@ -312,7 +314,7 @@ EOF
 
 phase7_vpn_setup() {
     log_info "=========================================="
-    log_info "PHASE 7: VPN Configuration"
+    log_info "PHASE 7: VPN Configuration - BEGIN"
     log_info "=========================================="
     
     # Clean up any stale lock files
@@ -366,7 +368,7 @@ EOF
     log_info "Updating VPN configuration to use credentials file..."
     sed -i 's/^auth-user-pass.*/auth-user-pass \/etc\/openvpn\/nordvpn-credentials/' /etc/openvpn/nordvpn.conf
     
-    log_success "VPN configured with server: $VPN_SERVER"
+    log_success "PHASE 7: VPN Configuration - COMPLETE (Server: $VPN_SERVER)"
 }
 
 ###############################################################################
@@ -375,7 +377,7 @@ EOF
 
 phase8_routing_firewall() {
     log_info "=========================================="
-    log_info "PHASE 8: Routing and Firewall Configuration"
+    log_info "PHASE 8: Routing and Firewall Configuration - BEGIN"
     log_info "=========================================="
     
     log_info "Enabling IP forwarding..."
@@ -411,7 +413,7 @@ phase8_routing_firewall() {
     echo iptables-persistent iptables-persistent/autosave_v4 boolean true | debconf-set-selections
     echo iptables-persistent iptables-persistent/autosave_v6 boolean true | debconf-set-selections
     
-    log_success "Routing and firewall configured"
+    log_success "PHASE 8: Routing and Firewall Configuration - COMPLETE"
 }
 
 ###############################################################################
@@ -420,7 +422,7 @@ phase8_routing_firewall() {
 
 phase9_startup_script() {
     log_info "=========================================="
-    log_info "PHASE 9: Startup Script Configuration"
+    log_info "PHASE 9: Startup Script Configuration - BEGIN"
     log_info "=========================================="
     
     log_info "Creating rc.local startup script..."
@@ -449,7 +451,7 @@ EOF
     # Enable rc-local service
     systemctl enable rc-local || true
     
-    log_success "Startup script configured"
+    log_success "PHASE 9: Startup Script Configuration - COMPLETE"
 }
 
 ###############################################################################
@@ -458,7 +460,7 @@ EOF
 
 phase10_enable_services() {
     log_info "=========================================="
-    log_info "PHASE 10: Enabling Services"
+    log_info "PHASE 10: Enabling Services - BEGIN"
     log_info "=========================================="
     
     log_info "Unmasking and enabling hostapd..."
@@ -474,7 +476,7 @@ phase10_enable_services() {
     log_info "Enabling OpenVPN..."
     systemctl enable openvpn@nordvpn
     
-    log_success "All services enabled"
+    log_success "PHASE 10: Enabling Services - COMPLETE"
 }
 
 ###############################################################################
@@ -483,7 +485,7 @@ phase10_enable_services() {
 
 phase11_start_services() {
     log_info "=========================================="
-    log_info "PHASE 11: Starting Services"
+    log_info "PHASE 11: Starting Services - BEGIN"
     log_info "=========================================="
     
     log_info "Unblocking WiFi with rfkill..."
@@ -510,7 +512,7 @@ phase11_start_services() {
     systemctl start openvpn@nordvpn
     sleep 10
     
-    log_success "All services started"
+    log_success "PHASE 11: Starting Services - COMPLETE"
 }
 
 ###############################################################################
@@ -519,7 +521,7 @@ phase11_start_services() {
 
 phase12_verification() {
     log_info "=========================================="
-    log_info "PHASE 12: System Verification"
+    log_info "PHASE 12: System Verification - BEGIN"
     log_info "=========================================="
     
     echo ""
@@ -576,10 +578,12 @@ phase12_verification() {
     echo ""
     if [ "$all_good" = true ]; then
         log_success "=========================================="
+        log_success "PHASE 12: System Verification - COMPLETE"
         log_success "Installation Complete!"
         log_success "=========================================="
     else
         log_warning "=========================================="
+        log_warning "PHASE 12: System Verification - COMPLETE (with warnings)"
         log_warning "Installation completed with warnings"
         log_warning "=========================================="
     fi
