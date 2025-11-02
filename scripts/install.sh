@@ -596,13 +596,21 @@ phase11_start_services() {
     ip link set wlan0 down 2>/dev/null || true
     ip link set wlan1 down 2>/dev/null || true
     
+    # Stop NetworkManager from managing wireless interfaces
+    if systemctl is-active --quiet NetworkManager; then
+        log_info "Configuring NetworkManager to ignore wireless interfaces..."
+        cat > /etc/NetworkManager/conf.d/unmanaged.conf << 'EOF'
+[keyfile]
+unmanaged-devices=interface-name:wlan0;interface-name:wlan1
+EOF
+        systemctl restart NetworkManager
+        sleep 2
+    fi
+    
     # Restart network management
     if systemctl list-unit-files | grep -q dhcpcd; then
         log_info "Restarting dhcpcd..."
         systemctl restart dhcpcd
-    else
-        log_info "Restarting NetworkManager..."
-        systemctl restart NetworkManager 2>/dev/null || systemctl restart systemd-networkd 2>/dev/null || true
     fi
     sleep 3
     
