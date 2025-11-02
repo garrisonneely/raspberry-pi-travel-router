@@ -304,6 +304,12 @@ EOF
     chmod 600 /etc/wpa_supplicant/wpa_supplicant-wlan1.conf
     
     log_success "WiFi client configured for: $WIFI_SSID"
+}
+
+###############################################################################
+# Phase 7: VPN Configuration
+###############################################################################
+
 phase7_vpn_setup() {
     log_info "=========================================="
     log_info "PHASE 7: VPN Configuration"
@@ -312,12 +318,6 @@ phase7_vpn_setup() {
     # Clean up any stale lock files
     rm -f /etc/openvpn/.nordvpn.conf.swp 2>/dev/null || true
     rm -f /etc/openvpn/.nordvpn-credentials.swp 2>/dev/null || true
-    
-    log_info "Downloading NordVPN configuration files..."
-phase7_vpn_setup() {
-    log_info "=========================================="
-    log_info "PHASE 7: VPN Configuration"
-    log_info "=========================================="
     
     log_info "Downloading NordVPN configuration files..."
     cd /tmp
