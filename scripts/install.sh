@@ -614,6 +614,22 @@ phase11_start_services() {
     systemctl restart dnsmasq
     sleep 2
     
+    # Check if wlan1 exists, if not try to load the driver
+    if ! ip link show wlan1 &> /dev/null; then
+        log_warning "wlan1 interface not found, attempting to load driver..."
+        modprobe 8812au 2>/dev/null || true
+        sleep 3
+        
+        if ! ip link show wlan1 &> /dev/null; then
+            log_error "wlan1 interface still not found after loading driver"
+            log_error "Please ensure USB WiFi adapter is connected and reboot"
+            log_info "After reboot, delete state file and re-run:"
+            log_info "  sudo rm /var/lib/travel-router-install.state"
+            log_info "  sudo bash scripts/install.sh"
+            exit 1
+        fi
+    fi
+    
     # Bring up wlan1 for WiFi client
     log_info "Bringing up wlan1..."
     ip link set wlan1 up
