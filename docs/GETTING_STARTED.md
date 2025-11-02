@@ -268,40 +268,160 @@ cd ~/raspberry-pi-travel-router
 sudo bash scripts/install.sh
 ```
 
-### 7.3 Follow Prompts
+### 7.3 Installation Phases
 
-The script will:
-1. ✓ Update system packages
-2. ✓ Install USB WiFi driver (may take 10-15 minutes)
-3. ✓ Configure network interfaces
-4. ✓ Ask for Access Point SSID and password
-5. ✓ Ask for WiFi network to connect to
-6. ✓ Ask for NordVPN server selection
-7. ✓ Ask for NordVPN credentials
-8. ✓ Configure firewall and routing
-9. ✓ Enable and start all services
-10. ✓ Verify installation
+The installation script runs through 12 distinct phases:
 
-**Installation time**: 20-40 minutes (driver compilation is the longest part)
+**Phase 1: System Preparation - BEGIN**
+- Updates package lists and system packages
+- Installs required packages (git, dkms, hostapd, dnsmasq, openvpn, etc.)
+- Time: 2-5 minutes
+- Network: Connected via dynamic DHCP IP
 
-**Expected reboots**: 1 reboot after driver installation (Phase 2). After reboot, reconnect via SSH and re-run the installation script - it will automatically continue from Phase 3.
+**Phase 2: USB WiFi Driver Installation - BEGIN**
+- Clones and compiles RTL8812AU driver for Netgear A7000
+- Installs driver via DKMS
+- Time: 10-15 minutes (longest phase)
+- **⚠️ REBOOT REQUIRED**: After this phase, system will reboot to load the driver
+- After reboot: SSH back in and re-run `sudo bash scripts/install.sh` to continue
 
-### 7.4 During Installation
+**Phase 3: Network Interface Configuration - BEGIN**
+- Configures static IP addresses for all interfaces
+- Sets up wlan0 (Access Point): 192.168.4.1/24
+- Sets up eth0 (Management): 192.168.100.2/24
+- Configures wlan1 (WiFi client) interface
+- **🔄 IP ADDRESS CHANGE**: After Phase 3 completes and you reboot or restart networking, the Raspberry Pi will use static IPs
+  - **SSH via Ethernet will change to: 192.168.100.2**
+  - Your current SSH session may disconnect if connected via dynamic IP
+- Time: < 1 minute
 
-The script will automatically handle most prompts. You'll be asked to provide:
-- Access Point SSID and password
-- WiFi network to connect to
-- NordVPN server and credentials
+**Phase 4: Access Point Configuration - BEGIN**
+- Prompts for Access Point SSID (default: GKTravelRouter)
+- Prompts for Access Point password (minimum 8 characters)
+- Creates hostapd configuration for wlan0
+- Time: < 1 minute
 
-**Note**: The driver installation may briefly show a prompt asking to edit driver options - the script automatically selects the default (no) which is appropriate for travel router use.
+**Phase 5: DHCP Server Configuration - BEGIN**
+- Configures dnsmasq for DHCP and DNS services
+- Sets up 192.168.4.2-192.168.4.20 address pool
+- Configures DNS forwarding to Google DNS (8.8.8.8, 8.8.4.4)
+- Time: < 1 minute
 
-### 7.4 Review Installation Log
+**Phase 6: WiFi Client Configuration - BEGIN**
+- Prompts for WiFi network SSID to connect to
+- Prompts for WiFi password
+- Creates wpa_supplicant configuration for wlan1
+- Time: < 1 minute
+
+**Phase 7: VPN Configuration - BEGIN**
+- Downloads NordVPN OpenVPN configuration files
+- Prompts for VPN server selection (default: us9952.nordvpn.com)
+- Prompts for NordVPN service credentials
+- Creates VPN configuration with credentials
+- Time: 1-2 minutes
+
+**Phase 8: Routing and Firewall Configuration - BEGIN**
+- Enables IP forwarding
+- Configures iptables NAT rules
+- Routes traffic from wlan0 → tun0 (VPN tunnel)
+- Blocks wlan0 → eth0 traffic for security
+- Saves firewall rules
+- Time: < 1 minute
+
+**Phase 9: Startup Script Configuration - BEGIN**
+- Creates /etc/rc.local for startup tasks
+- Configures automatic iptables restoration
+- Enables WiFi with rfkill
+- Time: < 1 minute
+
+**Phase 10: Enabling Services - BEGIN**
+- Enables hostapd (Access Point)
+- Enables dnsmasq (DHCP/DNS)
+- Enables wpa_supplicant@wlan1 (WiFi client)
+- Enables openvpn@nordvpn (VPN)
+- Time: < 1 minute
+
+**Phase 11: Starting Services - BEGIN**
+- Starts all configured services
+- Establishes WiFi connection on wlan1
+- Brings up VPN tunnel on tun0
+- Time: 1-2 minutes (VPN connection may take 10-30 seconds)
+
+**Phase 12: System Verification - BEGIN**
+- Checks all service statuses
+- Verifies network interfaces are up
+- Tests internet connectivity
+- Reports any issues
+- Time: < 1 minute
+
+**Total Installation Time**: 20-40 minutes (including driver compilation and reboot)
+
+**Expected Reboots**: 1 reboot after Phase 2 (driver installation)
+
+### 7.4 Important: IP Address Change After Phase 3
+
+**⚠️ Critical Information:**
+
+After Phase 3 completes, the Raspberry Pi's IP addresses will change from dynamic DHCP to static:
+- **Ethernet (eth0)**: Will become **192.168.100.2/24**
+- **Access Point (wlan0)**: Will become **192.168.4.1/24**
+
+**What this means for your SSH connection:**
+
+1. **If you're connected via Ethernet**: Your SSH session will likely disconnect when the IP changes. You'll need to reconnect to the new IP:
+   ```bash
+   ssh pi@192.168.100.2
+   ```
+
+2. **If you're connected via router DHCP**: The script will continue running, but after reboot you should connect via the static IP for management.
+
+3. **For best experience**: After Phase 3, the script may prompt you to reboot or restart networking. Follow the instructions and reconnect using the static IP.
+
+**Note**: If the script runs all phases without interruption, the IP change happens during service restarts in Phase 11. Your SSH session should remain connected, but subsequent connections must use 192.168.100.2.
+
+### 7.5 Monitoring Installation Progress
+
+You can monitor the installation in real-time by watching the log file. Open a second SSH session and run:
 
 ```bash
 tail -f /var/log/travel-router-install.log
 ```
 
-Press `Ctrl+C` to exit log viewer.
+You'll see each phase marked with:
+- `PHASE X: Description - BEGIN` when starting
+- `PHASE X: Description - COMPLETE` when finished
+
+This helps you track progress during the long driver compilation in Phase 2.
+
+### 7.6 During Installation
+
+The script will automatically handle most prompts. You'll be asked to provide:
+- Access Point SSID and password (Phase 4)
+- WiFi network to connect to (Phase 6)
+- NordVPN server and credentials (Phase 7)
+
+**Note**: The driver installation may briefly show a prompt asking to edit driver options - the script automatically selects the default (no) which is appropriate for travel router use.
+
+### 7.7 After Driver Installation (Phase 2)
+
+**IMPORTANT**: Phase 2 (driver installation) requires a system reboot. When you see:
+
+```
+[SUCCESS] PHASE 2: USB WiFi Driver Installation - COMPLETE
+System will reboot to load the driver...
+After reboot, SSH back in and re-run: sudo bash ~/raspberry-pi-travel-router/scripts/install.sh
+```
+
+The system will reboot. After reboot:
+
+1. Wait 30-60 seconds for the Pi to boot
+2. Reconnect via SSH (use the same IP you used before)
+3. Re-run the installation script:
+   ```bash
+   cd ~/raspberry-pi-travel-router
+   sudo bash scripts/install.sh
+   ```
+4. The script will automatically detect that Phase 2 is complete and continue from Phase 3
 
 ## Phase 8: Testing
 
