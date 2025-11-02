@@ -89,7 +89,7 @@ phase1_system_prep() {
     
     log_info "Installing required packages..."
     apt install -y git dkms build-essential hostapd dnsmasq openvpn unzip wget \
-        iptables iptables-persistent rfkill net-tools wireless-tools || \
+        iptables iptables-persistent rfkill net-tools wireless-tools bc || \
         { log_error "Failed to install required packages"; exit 1; }
     
     log_success "System preparation complete"
