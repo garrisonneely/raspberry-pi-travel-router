@@ -128,7 +128,11 @@ phase2_wifi_driver() {
     
     # Run installation with defaults (no interactive prompts)
     # The driver installation may ask to edit options - we skip this for automated setup
-    echo "n" | ./install-driver.sh || { log_error "Driver installation failed"; exit 1; }
+    echo -e "n\ny" | ./install-driver.sh || { log_error "Driver installation failed"; exit 1; }
+    
+    log_warning "System will reboot to load the driver..."
+    log_info "After reboot, SSH back in and re-run: sudo bash ~/raspberry-pi-travel-router/scripts/install.sh"
+    log_info "The script will automatically continue from where it left off."
     
     log_success "WiFi driver installed successfully"
     log_info "Checking for wlan1 interface..."
