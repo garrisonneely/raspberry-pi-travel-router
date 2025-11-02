@@ -212,6 +212,14 @@ interface wlan1
     env wpa_supplicant_conf=/etc/wpa_supplicant/wpa_supplicant-wlan1.conf
 EOF
     
+    log_info "Applying network configuration..."
+    # Apply the static IP to eth0 immediately
+    ip addr flush dev eth0 2>/dev/null || true
+    ip addr add 192.168.100.2/24 dev eth0 2>/dev/null || true
+    
+    log_warning "Network configuration applied. Your SSH connection may change to 192.168.100.2"
+    log_warning "If you lose connection, reconnect to: ssh pi@192.168.100.2"
+    
     mark_phase_complete "phase3"
     log_success "PHASE 3: Network Interface Configuration - COMPLETE"
 }
