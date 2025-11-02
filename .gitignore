@@ -1,0 +1,59 @@
+# Sensitive files
+config/nordvpn-credentials
+*.credentials
+
+# Personal WiFi configurations
+**/wpa_supplicant-*.conf
+
+# Log files
+*.log
+logs/
+
+# Backup files
+*.backup
+*.bak
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Python (if any Python scripts added)
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+
+# Archives
+*.zip
+*.tar.gz
+*.tgz
+
+# Don't ignore the downloaded NordVPN configs in documentation
+!docs/*.zip
+
+# Word/Office temporary files
+~$*
+.~lock.*
+
+# Personal documents with sensitive info
+Entire Setup.docx
+Wireless Config.docx
+*.pdf
+
+# Environment specific
+.env
+.env.local
