@@ -284,6 +284,15 @@ The script will:
 
 **Installation time**: 20-40 minutes (driver compilation is the longest part)
 
+### 7.4 During Installation
+
+The script will automatically handle most prompts. You'll be asked to provide:
+- Access Point SSID and password
+- WiFi network to connect to
+- NordVPN server and credentials
+
+**Note**: The driver installation may briefly show a prompt asking to edit driver options - the script automatically selects the default (no) which is appropriate for travel router use.
+
 ### 7.4 Review Installation Log
 
 ```bash

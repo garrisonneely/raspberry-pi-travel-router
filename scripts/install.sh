@@ -125,7 +125,10 @@ phase2_wifi_driver() {
     
     cd 8812au-20210820
     log_info "Installing driver (this may take several minutes)..."
-    ./install-driver.sh || { log_error "Driver installation failed"; exit 1; }
+    
+    # Run installation with defaults (no interactive prompts)
+    # The driver installation may ask to edit options - we skip this for automated setup
+    echo "n" | ./install-driver.sh || { log_error "Driver installation failed"; exit 1; }
     
     log_success "WiFi driver installed successfully"
     log_info "Checking for wlan1 interface..."
