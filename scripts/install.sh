@@ -187,8 +187,12 @@ phase3_network_interfaces() {
         return 0
     fi
     
+    log_warning "IMPORTANT: Phase 3 configures static IPs but does NOT apply them immediately"
+    log_warning "Static IPs will be applied in Phase 11 when all services start"
+    log_warning "This prevents network connectivity issues during installation"
+    
     log_info "Backing up existing dhcpcd.conf..."
-    cp /etc/dhcpcd.conf /etc/dhcpcd.conf.backup || true
+    cp /etc/dhcpcd.conf /etc/dhcpcd.conf.backup 2>/dev/null || true
     
     log_info "Configuring static IP addresses..."
     
@@ -212,13 +216,8 @@ interface wlan1
     env wpa_supplicant_conf=/etc/wpa_supplicant/wpa_supplicant-wlan1.conf
 EOF
     
-    log_info "Applying network configuration..."
-    # Apply the static IP to eth0 immediately
-    ip addr flush dev eth0 2>/dev/null || true
-    ip addr add 192.168.100.2/24 dev eth0 2>/dev/null || true
-    
-    log_warning "Network configuration applied. Your SSH connection may change to 192.168.100.2"
-    log_warning "If you lose connection, reconnect to: ssh pi@192.168.100.2"
+    log_info "Network configuration written to /etc/dhcpcd.conf"
+    log_info "Static IPs will be applied when services start in Phase 11"
     
     mark_phase_complete "phase3"
     log_success "PHASE 3: Network Interface Configuration - COMPLETE"
@@ -659,11 +658,28 @@ phase11_start_services() {
     done
     
     log_info "Starting OpenVPN..."
-    systemctl start openvpn@nordvpn
+    systemctl restart openvpn@nordvpn
     sleep 10
+    
+    # Now apply eth0 static IP (do this last to avoid losing SSH connection)
+    log_info "Applying static IP to eth0..."
+    log_warning "SSH connection will change to 192.168.100.2 after this step"
+    ip addr add 192.168.100.2/24 dev eth0 2>/dev/null || true
+    
+    # Restart dhcpcd to apply all static IP configurations from dhcpcd.conf
+    if systemctl list-unit-files | grep -q dhcpcd; then
+        systemctl restart dhcpcd
+    fi
     
     mark_phase_complete "phase11"
     log_success "PHASE 11: Starting Services - COMPLETE"
+    log_warning "=========================================="
+    log_warning "Network configuration now active!"
+    log_warning "Ethernet (eth0): 192.168.100.2/24"
+    log_warning "Access Point (wlan0): 192.168.4.1/24"
+    log_warning "If you lose this SSH connection, reconnect to: ssh pi@192.168.100.2"
+    log_warning "=========================================="
+    sleep 3
 }
 
 ###############################################################################
