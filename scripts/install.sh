@@ -584,26 +584,55 @@ phase11_start_services() {
     rfkill unblock wifi
     rfkill unblock all
     
-    log_info "Restarting dhcpcd..."
+    log_info "Configuring network interfaces..."
+    # Bring down interfaces first
+    ip link set wlan0 down 2>/dev/null || true
+    ip link set wlan1 down 2>/dev/null || true
+    
+    # Restart network management
     if systemctl list-unit-files | grep -q dhcpcd; then
+        log_info "Restarting dhcpcd..."
         systemctl restart dhcpcd
     else
-        log_warning "dhcpcd service not found, using NetworkManager or systemd-networkd"
+        log_info "Restarting NetworkManager..."
         systemctl restart NetworkManager 2>/dev/null || systemctl restart systemd-networkd 2>/dev/null || true
     fi
     sleep 3
     
-    log_info "Starting hostapd..."
-    systemctl start hostapd
+    # Configure wlan0 with static IP
+    log_info "Configuring wlan0 with static IP..."
+    ip addr flush dev wlan0 2>/dev/null || true
+    ip link set wlan0 up
+    ip addr add 192.168.4.1/24 dev wlan0
     sleep 2
     
+    log_info "Starting hostapd..."
+    systemctl restart hostapd
+    sleep 3
+    
     log_info "Starting dnsmasq..."
-    systemctl start dnsmasq
+    systemctl restart dnsmasq
+    sleep 2
+    
+    # Bring up wlan1 for WiFi client
+    log_info "Bringing up wlan1..."
+    ip link set wlan1 up
     sleep 2
     
     log_info "Starting wpa_supplicant for wlan1..."
-    systemctl start wpa_supplicant@wlan1
+    systemctl restart wpa_supplicant@wlan1
     sleep 5
+    
+    # Verify wlan1 connection
+    log_info "Waiting for wlan1 to connect..."
+    for i in {1..10}; do
+        if iw wlan1 link | grep -q "Connected"; then
+            log_success "wlan1 connected successfully"
+            break
+        fi
+        log_info "Waiting for connection... ($i/10)"
+        sleep 2
+    done
     
     log_info "Starting OpenVPN..."
     systemctl start openvpn@nordvpn
