@@ -104,6 +104,13 @@ phase2_wifi_driver() {
     log_info "PHASE 2: USB WiFi Driver Installation - BEGIN"
     log_info "=========================================="
     
+    # Check if phase 2 is already complete (driver loaded and wlan1 exists)
+    if lsmod | grep -q "8812au" && ip link show wlan1 &> /dev/null; then
+        log_success "Driver 8812au already loaded and wlan1 interface detected"
+        log_info "Skipping Phase 2 - already complete"
+        return 0
+    fi
+    
     log_info "Checking for existing driver installation..."
     if lsmod | grep -q "8812au"; then
         log_warning "Driver 8812au already loaded"
@@ -130,30 +137,14 @@ phase2_wifi_driver() {
     # The driver installation may ask to edit options - we skip this for automated setup
     echo -e "n\ny" | ./install-driver.sh || { log_error "Driver installation failed"; exit 1; }
     
+    log_success "PHASE 2: USB WiFi Driver Installation - COMPLETE"
     log_warning "System will reboot to load the driver..."
     log_info "After reboot, SSH back in and re-run: sudo bash ~/raspberry-pi-travel-router/scripts/install.sh"
-    log_info "The script will automatically continue from where it left off."
+    log_info "The script will automatically continue from Phase 3."
     
-    log_success "WiFi driver installed successfully"
-    log_info "Checking for wlan1 interface..."
-    
-    # Wait for interface to appear
-    for i in {1..10}; do
-        if ip link show wlan1 &> /dev/null; then
-            log_success "wlan1 interface detected"
-            break
-        fi
-        log_info "Waiting for wlan1... ($i/10)"
-        sleep 2
-    done
-    
-    if ! ip link show wlan1 &> /dev/null; then
-        log_error "wlan1 interface not detected. USB adapter may not be connected."
-        log_error "Please connect your Netgear A7000 and reboot, then re-run this script."
-        exit 1
-    fi
-    
-    log_success "PHASE 2: USB WiFi Driver Installation - COMPLETE"
+    read -p "$(echo -e ${YELLOW}Press Enter to reboot now...${NC} )"
+    reboot
+    exit 0
 }
 
 ###############################################################################
