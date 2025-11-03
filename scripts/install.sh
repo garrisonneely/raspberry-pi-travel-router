@@ -107,6 +107,14 @@ phase1_system_prep() {
         iptables iptables-persistent rfkill net-tools wireless-tools bc || \
         { log_error "Failed to install required packages"; exit 1; }
     
+    log_info "Configuring ethernet static IP for management access..."
+    # Apply static IP to eth0 immediately for reliable SSH access
+    ip addr add 192.168.100.2/24 dev eth0 2>/dev/null || true
+    
+    log_success "Ethernet configured with static IP: 192.168.100.2"
+    log_warning "You can now connect via Ethernet using: ssh pi@192.168.100.2"
+    log_info "Recommended: Switch to Ethernet connection before Phase 2 to avoid WiFi disruptions"
+    
     mark_phase_complete "phase1"
     log_success "PHASE 1: System Preparation - COMPLETE"
 }
@@ -164,8 +172,21 @@ phase2_wifi_driver() {
     mark_phase_complete "phase2"
     log_success "PHASE 2: USB WiFi Driver Installation - COMPLETE"
     log_warning "System will reboot to load the driver..."
-    log_info "After reboot, SSH back in and re-run: sudo bash ~/raspberry-pi-travel-router/scripts/install.sh"
-    log_info "The script will automatically continue from Phase 3."
+    log_info ""
+    log_info "=========================================="
+    log_info "IMPORTANT: After reboot, connect via Ethernet!"
+    log_info "=========================================="
+    log_info "Ethernet IP: 192.168.100.2"
+    log_info "Command: ssh pi@192.168.100.2"
+    log_info ""
+    log_info "Using Ethernet prevents WiFi configuration issues"
+    log_info "from disrupting your SSH connection."
+    log_info "=========================================="
+    log_info ""
+    log_info "After reconnecting, run:"
+    log_info "  cd ~/raspberry-pi-travel-router"
+    log_info "  sudo bash scripts/install.sh"
+    log_info "=========================================="
     
     read -p "$(echo -e ${YELLOW}Press Enter to reboot now...${NC} )"
     reboot
@@ -669,25 +690,14 @@ EOF
     systemctl restart openvpn@nordvpn
     sleep 10
     
-    # Now apply eth0 static IP (do this last to avoid losing SSH connection)
-    log_info "Applying static IP to eth0..."
-    log_warning "SSH connection will change to 192.168.100.2 after this step"
-    ip addr add 192.168.100.2/24 dev eth0 2>/dev/null || true
-    
-    # Restart dhcpcd to apply all static IP configurations from dhcpcd.conf
-    if systemctl list-unit-files | grep -q dhcpcd; then
-        systemctl restart dhcpcd
+    # Static IP already applied in Phase 1, just verify it's still set
+    if ! ip addr show eth0 | grep -q "192.168.100.2"; then
+        log_info "Ensuring static IP on eth0..."
+        ip addr add 192.168.100.2/24 dev eth0 2>/dev/null || true
     fi
     
     mark_phase_complete "phase11"
     log_success "PHASE 11: Starting Services - COMPLETE"
-    log_warning "=========================================="
-    log_warning "Network configuration now active!"
-    log_warning "Ethernet (eth0): 192.168.100.2/24"
-    log_warning "Access Point (wlan0): 192.168.4.1/24"
-    log_warning "If you lose this SSH connection, reconnect to: ssh pi@192.168.100.2"
-    log_warning "=========================================="
-    sleep 3
 }
 
 ###############################################################################

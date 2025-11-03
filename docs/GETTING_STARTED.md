@@ -275,14 +275,19 @@ The installation script runs through 12 distinct phases:
 **Phase 1: System Preparation - BEGIN**
 - Updates package lists and system packages
 - Installs required packages (git, dkms, hostapd, dnsmasq, openvpn, etc.)
+- **🔧 ETHERNET STATIC IP CONFIGURED**: eth0 set to 192.168.100.2/24
+- **Recommended**: After Phase 1, connect your computer to the Pi via Ethernet cable
+- This provides reliable SSH access for the remaining phases
 - Time: 2-5 minutes
-- Network: Connected via dynamic DHCP IP
+- Network: Connected via WiFi DHCP initially, then Ethernet 192.168.100.2
 
 **Phase 2: USB WiFi Driver Installation - BEGIN**
 - Clones and compiles RTL8812AU driver for Netgear A7000
 - Installs driver via DKMS
 - Time: 10-15 minutes (longest phase)
 - **⚠️ REBOOT REQUIRED**: After this phase, system will reboot to load the driver
+- **🔌 SWITCH TO ETHERNET**: After reboot, connect via Ethernet at 192.168.100.2
+- Command after reboot: `ssh pi@192.168.100.2`
 - After reboot: SSH back in and re-run `sudo bash scripts/install.sh` to continue
 
 **Phase 3: Network Interface Configuration - BEGIN**
