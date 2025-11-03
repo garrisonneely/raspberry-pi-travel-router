@@ -111,7 +111,23 @@ phase1_system_prep() {
     # Apply static IP to eth0 immediately for reliable SSH access
     ip addr add 192.168.100.2/24 dev eth0 2>/dev/null || true
     
+    # Make eth0 IP persistent across reboots using systemd-networkd configuration
+    log_info "Creating persistent network configuration for eth0..."
+    mkdir -p /etc/systemd/network
+    cat > /etc/systemd/network/10-eth0.network << 'EOF'
+[Match]
+Name=eth0
+
+[Network]
+Address=192.168.100.2/24
+EOF
+    
+    # Enable systemd-networkd if not already enabled
+    systemctl enable systemd-networkd 2>/dev/null || true
+    systemctl start systemd-networkd 2>/dev/null || true
+    
     log_success "Ethernet configured with static IP: 192.168.100.2"
+    log_success "Configuration persists across reboots"
     log_warning "You can now connect via Ethernet using: ssh pi@192.168.100.2"
     log_info "Recommended: Switch to Ethernet connection before Phase 2 to avoid WiFi disruptions"
     
