@@ -152,16 +152,43 @@ phase2_wifi_driver() {
     fi
     
     # Check if driver is loaded and wlan1 exists (completed but not marked)
-    if lsmod | grep -q "8812au" && ip link show wlan1 &> /dev/null; then
-        log_success "Driver 8812au already loaded and wlan1 interface detected"
+    if (lsmod | grep -q "8812au" || lsmod | grep -q "8814au") && ip link show wlan1 &> /dev/null; then
+        log_success "Driver already loaded and wlan1 interface detected"
         mark_phase_complete "phase2"
         log_info "Skipping Phase 2 - already complete"
         return 0
     fi
     
+    log_info "Detecting USB WiFi adapter..."
+    
+    # Detect which Realtek chipset is present
+    DRIVER_REPO=""
+    DRIVER_NAME=""
+    DRIVER_DIR=""
+    
+    if lsusb | grep -q "0846:9054"; then
+        # Netgear A7000 - RTL8814AU
+        log_info "Detected: Netgear A7000 (RTL8814AU chipset)"
+        DRIVER_REPO="https://github.com/morrownr/8814au.git"
+        DRIVER_NAME="8814au"
+        DRIVER_DIR="8814au"
+    elif lsusb | grep -q "0bda:8812"; then
+        # RTL8812AU chipset
+        log_info "Detected: RTL8812AU chipset"
+        DRIVER_REPO="https://github.com/morrownr/8812au-20210820.git"
+        DRIVER_NAME="8812au"
+        DRIVER_DIR="8812au-20210820"
+    else
+        log_warning "Could not auto-detect USB WiFi adapter chipset"
+        log_info "Using default RTL8812AU driver"
+        DRIVER_REPO="https://github.com/morrownr/8812au-20210820.git"
+        DRIVER_NAME="8812au"
+        DRIVER_DIR="8812au-20210820"
+    fi
+    
     log_info "Checking for existing driver installation..."
-    if lsmod | grep -q "8812au"; then
-        log_warning "Driver 8812au already loaded"
+    if lsmod | grep -q "$DRIVER_NAME"; then
+        log_warning "Driver $DRIVER_NAME already loaded"
         read -p "$(echo -e ${YELLOW}Reinstall driver? [y/N]:${NC} )" -n 1 -r
         echo
         if [[ ! $REPLY =~ ^[Yy]$ ]]; then
@@ -170,16 +197,16 @@ phase2_wifi_driver() {
         fi
     fi
     
-    log_info "Cloning 8812au driver repository..."
+    log_info "Cloning $DRIVER_NAME driver repository..."
     cd /tmp
-    if [ -d "8812au-20210820" ]; then
-        rm -rf 8812au-20210820
+    if [ -d "$DRIVER_DIR" ]; then
+        rm -rf "$DRIVER_DIR"
     fi
-    git clone https://github.com/morrownr/8812au-20210820.git || \
+    git clone "$DRIVER_REPO" || \
         { log_error "Failed to clone driver repository"; exit 1; }
     
-    cd 8812au-20210820
-    log_info "Installing driver (this may take several minutes)..."
+    cd "$DRIVER_DIR"
+    log_info "Installing $DRIVER_NAME driver (this may take several minutes)..."
     
     # Run installation with defaults (no interactive prompts)
     # The driver installation may ask to edit options - we skip this for automated setup
@@ -372,12 +399,11 @@ phase6_wifi_client() {
         return 0
     fi
     
-    log_info "Press Enter to use default values or type custom values..."
-    read -t 5 -p "Enter WiFi network SSID to connect to [PenthouseWiFi]: " WIFI_SSID || true
-    WIFI_SSID=${WIFI_SSID:-PenthouseWiFi}
+    log_info "Enter WiFi network credentials to connect to..."
+    read -p "Enter WiFi network SSID: " WIFI_SSID
     
-    read -t 5 -p "Enter WiFi network password [WATERTOWER514]: " WIFI_PASSWORD || true
-    WIFI_PASSWORD=${WIFI_PASSWORD:-WATERTOWER514}
+    read -sp "Enter WiFi network password: " WIFI_PASSWORD
+    echo
     
     log_info "Creating wpa_supplicant configuration for wlan1..."
     cat > /etc/wpa_supplicant/wpa_supplicant-wlan1.conf << EOF
@@ -451,12 +477,9 @@ phase7_vpn_setup() {
     
     log_info "Enter your NordVPN service credentials"
     log_info "(Find these in your NordVPN dashboard under 'Manual Setup')"
-    log_info "Press Enter to use default credentials or type custom credentials..."
-    read -t 5 -p "NordVPN service username [8x8ZuVWfXrbbbc8jTpapJ9GS]: " NORD_USER || true
-    NORD_USER=${NORD_USER:-8x8ZuVWfXrbbbc8jTpapJ9GS}
+    read -p "NordVPN service username: " NORD_USER
     
-    read -t 5 -sp "NordVPN service password [****hidden****]: " NORD_PASS || true
-    NORD_PASS=${NORD_PASS:-9ifbQYEPfco2ye8RJpxco8nt}
+    read -sp "NordVPN service password: " NORD_PASS
     echo
     
     log_info "Creating credentials file..."
@@ -669,13 +692,18 @@ EOF
     # Check if wlan1 exists, if not try to load the driver
     if ! ip link show wlan1 &> /dev/null; then
         log_warning "wlan1 interface not found, attempting to load driver..."
-        modprobe 8812au 2>/dev/null || true
+        modprobe 8812au 2>/dev/null || modprobe 8814au 2>/dev/null || true
         sleep 3
         
         if ! ip link show wlan1 &> /dev/null; then
             log_error "wlan1 interface still not found after loading driver"
-            log_error "Please ensure USB WiFi adapter is connected and reboot"
-            log_info "After reboot, delete state file and re-run:"
+            log_error "Please ensure USB WiFi adapter is connected"
+            log_info "Detected USB devices:"
+            lsusb | grep -i "realtek\|netgear" || log_warning "No Realtek/Netgear USB devices found"
+            log_info ""
+            log_info "To fix: ensure adapter is plugged in, then reboot and re-run:"
+            log_info "  sudo reboot"
+            log_info "After reboot:"
             log_info "  sudo rm /var/lib/travel-router-install.state"
             log_info "  sudo bash scripts/install.sh"
             exit 1

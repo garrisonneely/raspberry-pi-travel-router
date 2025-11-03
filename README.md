@@ -16,13 +16,13 @@ Transform your Raspberry Pi 4 into a portable VPN router that creates a secure W
 | Component | Specification |
 |-----------|--------------|
 | **Raspberry Pi** | Raspberry Pi 4 Model B (2GB+ RAM recommended) |
-| **USB WiFi Adapter** | Netgear A7000 (or compatible Realtek 8812AU chipset) |
+| **USB WiFi Adapter** | Netgear A7000 (Realtek RTL8814AU chipset) |
 | **MicroSD Card** | 32GB+ (Class 10 or better) |
 | **Power Supply** | Official Raspberry Pi 4 power supply (5V/3A USB-C) |
 | **Ethernet Cable** | For initial setup and management access |
 
 ### Why the Netgear A7000?
-The A7000 uses the Realtek RTL8812AU chipset, which has excellent Linux driver support and can handle both 2.4GHz and 5GHz networks. It's stable, reliable, and widely available.
+The A7000 uses the Realtek RTL8814AU chipset, which has excellent Linux driver support and can handle both 2.4GHz and 5GHz networks. It's stable, reliable, and widely available. The installation script auto-detects the chipset and installs the correct driver.
 
 ## 🏗️ Network Architecture
 

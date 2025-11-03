@@ -21,7 +21,7 @@ A portable VPN router that:
 ### 1.1 Gather Components
 
 ✓ Raspberry Pi 4 Model B  
-✓ Netgear A7000 USB WiFi Adapter  
+✓ Netgear A7000 USB WiFi Adapter (RTL8814AU chipset)  
 ✓ MicroSD card (32GB+, Class 10)  
 ✓ USB-C power supply (official RPi 5V/3A recommended)  
 ✓ Ethernet cable  
@@ -282,7 +282,9 @@ The installation script runs through 12 distinct phases:
 - Network: Connected via WiFi DHCP initially, then Ethernet 192.168.100.2
 
 **Phase 2: USB WiFi Driver Installation - BEGIN**
-- Clones and compiles RTL8812AU driver for Netgear A7000
+- Auto-detects USB WiFi adapter chipset (RTL8812AU or RTL8814AU)
+- **Note**: Netgear A7000 uses RTL8814AU chipset
+- Clones and compiles correct driver for your adapter
 - Installs driver via DKMS
 - Time: 10-15 minutes (longest phase)
 - **⚠️ REBOOT REQUIRED**: After this phase, system will reboot to load the driver
