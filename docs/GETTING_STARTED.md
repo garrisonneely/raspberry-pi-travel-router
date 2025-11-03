@@ -293,10 +293,10 @@ The installation script runs through 12 distinct phases:
 **Phase 3: Network Interface Configuration - BEGIN**
 - Configures static IP addresses for all interfaces
 - Sets up wlan0 (Access Point): 192.168.4.1/24
-- Sets up eth0 (Management): 192.168.100.2/24
+- Sets up eth0 (Management): 192.168.100.2/24 (already active from Phase 1)
 - Configures wlan1 (WiFi client) interface
-- **⚠️ IMPORTANT**: Configuration is written but NOT applied yet
-- Static IPs will be applied at the end of Phase 11 to avoid disrupting installation
+- **⚠️ IMPORTANT**: Configuration is written but NOT applied yet (except eth0 which is already set)
+- Remaining static IPs will be applied when services start in Phase 11
 - Time: < 1 minute
 
 **Phase 4: Access Point Configuration - BEGIN**
@@ -346,13 +346,12 @@ The installation script runs through 12 distinct phases:
 - Time: < 1 minute
 
 **Phase 11: Starting Services - BEGIN**
+- Configures NetworkManager to not manage wireless interfaces (wlan0/wlan1)
 - Starts all configured services
 - Establishes WiFi connection on wlan1
 - Brings up VPN tunnel on tun0
-- **🔄 IP ADDRESS CHANGE**: At the end of Phase 11, static IP is applied to eth0
-  - **Your SSH connection will change to: 192.168.100.2**
-  - Your current SSH session may disconnect
-  - Reconnect immediately with: `ssh pi@192.168.100.2`
+- Verifies eth0 static IP (192.168.100.2) is still configured
+- **Note**: You should already be connected via Ethernet at 192.168.100.2 from Phase 2 reboot
 - Time: 1-2 minutes (VPN connection may take 10-30 seconds)
 
 **Phase 12: System Verification - BEGIN**
@@ -366,35 +365,31 @@ The installation script runs through 12 distinct phases:
 
 **Expected Reboots**: 1 reboot after Phase 2 (driver installation)
 
-### 7.4 Important: IP Address Change After Phase 11
+### 7.4 Important: Connection Switching During Installation
 
 **⚠️ Critical Information:**
 
-The Raspberry Pi's IP address will change from dynamic DHCP to static at the **end of Phase 11**.
+The installation uses **two connection methods** for reliability:
 
-**What happens:**
-- Phases 1-10 run while connected via your router's DHCP-assigned IP
-- Phase 11 starts all services and applies the static IP configuration
-- At the end of Phase 11, eth0 changes to **192.168.100.2/24**
+**Phase 1: WiFi DHCP** (Initial Connection)
+- Connect via your router's DHCP-assigned IP (e.g., 192.168.1.100)
+- Run installation script, which configures Ethernet with static IP 192.168.100.2
+- Phase 1 completes in a few minutes
 
-**What this means for your SSH connection:**
+**Phase 2+: Ethernet 192.168.100.2** (After Reboot)
+- After Phase 2 reboot, **switch your SSH connection to Ethernet**:
+  ```bash
+  ssh pi@192.168.100.2
+  ```
+- Connect Ethernet cable between your computer (set to 192.168.100.1) and Pi
+- Complete all remaining phases via this stable Ethernet connection
+- This prevents WiFi configuration changes from disrupting your SSH session
 
-Your SSH session will likely disconnect when the IP changes. Simply reconnect:
-```bash
-ssh pi@192.168.100.2
-```
-
-The script will display a warning when this happens:
-```
-[WARNING] Network configuration now active!
-[WARNING] Ethernet (eth0): 192.168.100.2/24
-[WARNING] If you lose this SSH connection, reconnect to: ssh pi@192.168.100.2
-```
-
-After reconnecting, the script will continue to Phase 12 (verification) automatically if it was interrupted, or you can check the system status with:
-```bash
-bash scripts/router-status.sh
-```
+**Why this approach?**
+- Phases 3-11 configure WiFi interfaces (wlan0, wlan1)
+- If connected via WiFi during these phases, you could lose access
+- Ethernet provides a separate, stable management interface
+- You can always access the Pi at 192.168.100.2 regardless of WiFi state
 
 ### 7.5 Monitoring Installation Progress
 
