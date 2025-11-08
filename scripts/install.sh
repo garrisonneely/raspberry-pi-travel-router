@@ -663,23 +663,34 @@ phase11_start_services() {
     rfkill unblock all
     
     log_info "Configuring network interfaces..."
-    # Bring down interfaces first
-    ip link set wlan0 down 2>/dev/null || true
-    ip link set wlan1 down 2>/dev/null || true
     
-    # Stop NetworkManager from managing wireless interfaces
+    # CRITICAL: Force NetworkManager to release wlan0/wlan1 IMMEDIATELY
     if systemctl is-active --quiet NetworkManager; then
-        log_info "Configuring NetworkManager to ignore wireless interfaces..."
+        log_info "Forcing NetworkManager to release wireless interfaces..."
+        
+        # Create unmanaged config
         mkdir -p /etc/NetworkManager/conf.d
         cat > /etc/NetworkManager/conf.d/unmanaged.conf << 'EOF'
 [keyfile]
 unmanaged-devices=interface-name:wlan0;interface-name:wlan1
 EOF
-        # Don't restart NetworkManager - it can disrupt connections
-        # Just reload the configuration
-        systemctl reload NetworkManager 2>/dev/null || true
-        sleep 1
+        
+        # Force NetworkManager to immediately unmanage the interfaces
+        nmcli device set wlan0 managed no 2>/dev/null || true
+        nmcli device set wlan1 managed no 2>/dev/null || true
+        
+        # Disconnect any active connections on wireless interfaces
+        nmcli connection down "PenthouseWiFi" 2>/dev/null || true
+        nmcli device disconnect wlan0 2>/dev/null || true
+        
+        log_success "NetworkManager released wireless interfaces"
+        sleep 2
     fi
+    
+    # Bring down interfaces to reset them
+    ip link set wlan0 down 2>/dev/null || true
+    ip link set wlan1 down 2>/dev/null || true
+    sleep 1
     
     # Restart network management if using dhcpcd
     if systemctl list-unit-files | grep -q "^dhcpcd.service"; then
