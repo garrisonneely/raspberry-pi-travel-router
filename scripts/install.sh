@@ -255,17 +255,19 @@ phase3_network_interfaces() {
     log_warning "Static IPs will be applied in Phase 11 when all services start"
     log_warning "This prevents network connectivity issues during installation"
     
-    log_info "Backing up existing dhcpcd.conf..."
-    cp /etc/dhcpcd.conf /etc/dhcpcd.conf.backup 2>/dev/null || true
-    
-    log_info "Configuring static IP addresses..."
-    
-    # Remove any existing wlan0/wlan1/eth0 configurations
-    sed -i '/^interface wlan0/,/^$/d' /etc/dhcpcd.conf
-    sed -i '/^interface wlan1/,/^$/d' /etc/dhcpcd.conf
-    sed -i '/^interface eth0/,/^$/d' /etc/dhcpcd.conf
-    
-    cat >> /etc/dhcpcd.conf << 'EOF'
+    # Check if dhcpcd is being used
+    if [ -f /etc/dhcpcd.conf ]; then
+        log_info "Backing up existing dhcpcd.conf..."
+        cp /etc/dhcpcd.conf /etc/dhcpcd.conf.backup 2>/dev/null || true
+        
+        log_info "Configuring static IP addresses in dhcpcd..."
+        
+        # Remove any existing wlan0/wlan1/eth0 configurations
+        sed -i '/^interface wlan0/,/^$/d' /etc/dhcpcd.conf
+        sed -i '/^interface wlan1/,/^$/d' /etc/dhcpcd.conf
+        sed -i '/^interface eth0/,/^$/d' /etc/dhcpcd.conf
+        
+        cat >> /etc/dhcpcd.conf << 'EOF'
 
 # Travel Router Configuration
 interface wlan0
@@ -273,14 +275,19 @@ interface wlan0
     nohook wpa_supplicant
     nohook dhcp
 
-interface eth0
-    static ip_address=192.168.100.2/24
+# Note: eth0 is managed by systemd-networkd (configured in Phase 1)
 
 interface wlan1
     env wpa_supplicant_conf=/etc/wpa_supplicant/wpa_supplicant-wlan1.conf
 EOF
+        
+        log_info "Network configuration written to /etc/dhcpcd.conf"
+    else
+        log_info "dhcpcd not found - system uses NetworkManager or systemd-networkd"
+        log_info "Will configure network interfaces directly in Phase 11"
+    fi
     
-    log_info "Network configuration written to /etc/dhcpcd.conf"
+    log_info "Note: eth0 already configured via systemd-networkd in Phase 1"
     log_info "Static IPs will be applied when services start in Phase 11"
     
     mark_phase_complete "phase3"
@@ -659,20 +666,25 @@ phase11_start_services() {
     # Stop NetworkManager from managing wireless interfaces
     if systemctl is-active --quiet NetworkManager; then
         log_info "Configuring NetworkManager to ignore wireless interfaces..."
+        mkdir -p /etc/NetworkManager/conf.d
         cat > /etc/NetworkManager/conf.d/unmanaged.conf << 'EOF'
 [keyfile]
 unmanaged-devices=interface-name:wlan0;interface-name:wlan1
 EOF
-        systemctl restart NetworkManager
-        sleep 2
+        # Don't restart NetworkManager - it can disrupt connections
+        # Just reload the configuration
+        systemctl reload NetworkManager 2>/dev/null || true
+        sleep 1
     fi
     
-    # Restart network management
-    if systemctl list-unit-files | grep -q dhcpcd; then
+    # Restart network management if using dhcpcd
+    if systemctl list-unit-files | grep -q "^dhcpcd.service"; then
         log_info "Restarting dhcpcd..."
         systemctl restart dhcpcd
+        sleep 3
+    else
+        log_info "dhcpcd not in use, skipping restart"
     fi
-    sleep 3
     
     # Configure wlan0 with static IP
     log_info "Configuring wlan0 with static IP..."
