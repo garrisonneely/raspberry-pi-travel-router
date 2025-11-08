@@ -407,9 +407,11 @@ phase6_wifi_client() {
     fi
     
     log_info "Enter WiFi network credentials to connect to..."
-    read -p "Enter WiFi network SSID: " WIFI_SSID
+    read -t 10 -p "Enter WiFi network SSID [PenthouseWiFi]: " WIFI_SSID || true
+    WIFI_SSID=${WIFI_SSID:-PenthouseWiFi}
     
-    read -sp "Enter WiFi network password: " WIFI_PASSWORD
+    read -t 10 -sp "Enter WiFi network password [****hidden****]: " WIFI_PASSWORD || true
+    WIFI_PASSWORD=${WIFI_PASSWORD:-WATERTOWER514}
     echo
     
     log_info "Creating wpa_supplicant configuration for wlan1..."
@@ -484,9 +486,11 @@ phase7_vpn_setup() {
     
     log_info "Enter your NordVPN service credentials"
     log_info "(Find these in your NordVPN dashboard under 'Manual Setup')"
-    read -p "NordVPN service username: " NORD_USER
+    read -t 10 -p "NordVPN service username [8x8ZuVWfXrbbbc8jTpapJ9GS]: " NORD_USER || true
+    NORD_USER=${NORD_USER:-8x8ZuVWfXrbbbc8jTpapJ9GS}
     
-    read -sp "NordVPN service password: " NORD_PASS
+    read -t 10 -sp "NordVPN service password [****hidden****]: " NORD_PASS || true
+    NORD_PASS=${NORD_PASS:-9ifbQYEPfco2ye8RJpxco8nt}
     echo
     
     log_info "Creating credentials file..."
