@@ -188,7 +188,8 @@ phase1_system_prep() {
     
     log_info "Installing required packages..."
     apt install -y git dkms build-essential hostapd dnsmasq openvpn unzip wget \
-        iptables iptables-persistent rfkill net-tools wireless-tools bc || \
+        iptables iptables-persistent rfkill net-tools wireless-tools bc \
+        isc-dhcp-client || \
         { log_error "Failed to install required packages"; exit 1; }
     
     log_info "Configuring ethernet static IP for management access..."
@@ -996,14 +997,31 @@ phase12_verification() {
     log_info "Running comprehensive health check..."
     echo ""
     
+    # Try multiple paths to find the health check script
+    HEALTH_CHECK_FOUND=false
+    
+    # Path 1: Same directory as install script
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     if [ -f "$SCRIPT_DIR/router-health.sh" ]; then
         bash "$SCRIPT_DIR/router-health.sh"
-    elif [ -f "$(dirname "$SCRIPT_DIR")/scripts/router-health.sh" ]; then
-        bash "$(dirname "$SCRIPT_DIR")/scripts/router-health.sh"
-    else
-        log_warning "Health check script not found, skipping detailed diagnostics"
-        log_info "You can manually run: sudo bash scripts/router-health.sh"
+        HEALTH_CHECK_FOUND=true
+    # Path 2: scripts directory relative to current directory
+    elif [ -f "./scripts/router-health.sh" ]; then
+        bash "./scripts/router-health.sh"
+        HEALTH_CHECK_FOUND=true
+    # Path 3: In repository root
+    elif [ -f "$(pwd)/router-health.sh" ]; then
+        bash "$(pwd)/router-health.sh"
+        HEALTH_CHECK_FOUND=true
+    # Path 4: Look for it anywhere in the repo
+    elif [ -f ~/raspberry-pi-travel-router/scripts/router-health.sh ]; then
+        bash ~/raspberry-pi-travel-router/scripts/router-health.sh
+        HEALTH_CHECK_FOUND=true
+    fi
+    
+    if [ "$HEALTH_CHECK_FOUND" = false ]; then
+        log_warning "Health check script not found"
+        log_info "You can manually run: sudo bash ~/raspberry-pi-travel-router/scripts/router-health.sh"
     fi
 }
 

@@ -374,6 +374,7 @@ The installation script runs through 12 distinct phases:
 - Configures NetworkManager to not manage wireless interfaces (wlan0/wlan1)
 - Starts all configured services
 - Establishes WiFi connection on wlan1
+- **Requests DHCP lease for wlan1** (critical for internet access)
 - Brings up VPN tunnel on tun0
 - Verifies eth0 static IP (192.168.100.2) is still configured
 - **Note**: You should already be connected via Ethernet at 192.168.100.2 from Phase 2 reboot
@@ -383,6 +384,8 @@ The installation script runs through 12 distinct phases:
 - Checks all service statuses
 - Verifies network interfaces are up
 - Tests internet connectivity
+- **Runs comprehensive health check** with detailed diagnostics
+- Reports any errors with troubleshooting steps
 - Reports any issues
 - Time: < 1 minute
 
@@ -543,27 +546,49 @@ bash scripts/router-status.sh
 
 If something isn't working:
 
-1. **Check the installation log**:
+1. **Run the health check first**:
+   ```bash
+   sudo bash scripts/router-health.sh
+   ```
+   This provides detailed diagnostics and specific troubleshooting steps.
+
+2. **wlan1 has no IP address** (Common issue):
+   If installation completes but you have no internet:
+   ```bash
+   # Quick fix
+   sudo bash scripts/fix-wlan1-dhcp.sh
+   
+   # Or manually
+   sudo apt install -y isc-dhcp-client
+   sudo dhclient wlan1
+   ```
+
+3. **Check the installation log**:
    ```bash
    cat /var/log/travel-router-install.log
    ```
 
-2. **Check service status**:
+4. **Check service status**:
    ```bash
    bash scripts/router-status.sh
    ```
 
-3. **View real-time logs**:
+5. **Collect detailed diagnostics**:
+   ```bash
+   sudo bash scripts/collect-diagnostics.sh
+   ```
+
+6. **View real-time logs**:
    ```bash
    sudo journalctl -f
    ```
 
-4. **Restart services**:
+7. **Restart services**:
    ```bash
    sudo systemctl restart hostapd dnsmasq wpa_supplicant@wlan1 openvpn@nordvpn
    ```
 
-5. **See full troubleshooting guide**: [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)
+8. **See full troubleshooting guide**: [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)
 
 ## Next Steps
 
@@ -578,6 +603,15 @@ If something isn't working:
 ### Common Commands
 
 ```bash
+# Run health check (comprehensive diagnostics)
+sudo bash scripts/router-health.sh
+
+# Fix wlan1 DHCP issue
+sudo bash scripts/fix-wlan1-dhcp.sh
+
+# Collect detailed diagnostics
+sudo bash scripts/collect-diagnostics.sh
+
 # Check status
 bash scripts/router-status.sh
 

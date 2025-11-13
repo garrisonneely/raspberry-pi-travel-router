@@ -48,6 +48,17 @@ ip addr show wlan1 | grep "inet " || echo "  No IP address"
 iw wlan1 link | grep -E "SSID|signal" || echo "  Not connected"
 echo ""
 
+# Check if dhclient is installed
+if ! command -v dhclient &> /dev/null; then
+    log_warning "dhclient not found, installing isc-dhcp-client..."
+    apt update
+    apt install -y isc-dhcp-client || {
+        log_error "Failed to install dhclient"
+        exit 1
+    }
+    log_success "dhclient installed"
+fi
+
 # The issue: dhcpcd or NetworkManager may not be managing wlan1
 log_info "Checking what's managing wlan1..."
 
