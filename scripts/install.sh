@@ -874,6 +874,29 @@ EOF
         sleep 2
     done
     
+    # Request DHCP lease for wlan1
+    log_info "Requesting DHCP lease for wlan1..."
+    if systemctl is-active --quiet dhcpcd; then
+        # If dhcpcd is running, restart it to pick up wlan1
+        systemctl restart dhcpcd
+        sleep 5
+    else
+        # Use dhclient directly (common on systems without dhcpcd)
+        pkill -f "dhclient.*wlan1" 2>/dev/null || true
+        dhclient -v wlan1 &
+        sleep 5
+    fi
+    
+    # Verify wlan1 got an IP
+    wlan1_ip=$(ip addr show wlan1 | grep "inet " | awk '{print $2}')
+    if [ -n "$wlan1_ip" ]; then
+        log_success "wlan1 received IP: $wlan1_ip"
+    else
+        log_warning "wlan1 did not receive IP via DHCP"
+        log_warning "This may cause VPN connection issues"
+        log_info "You can manually fix this later with: sudo dhclient wlan1"
+    fi
+    
     log_info "Starting OpenVPN..."
     systemctl restart openvpn@nordvpn
     sleep 10
