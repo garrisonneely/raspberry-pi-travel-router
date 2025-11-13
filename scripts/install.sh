@@ -509,12 +509,18 @@ phase6_wifi_client() {
     fi
     
     log_info "Enter WiFi network credentials to connect to..."
-    read -t 10 -p "Enter WiFi network SSID [PenthouseWiFi]: " WIFI_SSID || true
-    WIFI_SSID=${WIFI_SSID:-PenthouseWiFi}
+    read -t 10 -p "Enter WiFi network SSID: " WIFI_SSID || true
+    if [ -z "$WIFI_SSID" ]; then
+        log_error "WiFi SSID is required"
+        exit 1
+    fi
     
-    read -t 10 -sp "Enter WiFi network password [****hidden****]: " WIFI_PASSWORD || true
-    WIFI_PASSWORD=${WIFI_PASSWORD:-WATERTOWER514}
+    read -t 10 -sp "Enter WiFi network password: " WIFI_PASSWORD || true
     echo
+    if [ -z "$WIFI_PASSWORD" ]; then
+        log_error "WiFi password is required"
+        exit 1
+    fi
     
     log_info "Creating wpa_supplicant configuration for wlan1..."
     cat > /etc/wpa_supplicant/wpa_supplicant-wlan1.conf << EOF
@@ -588,12 +594,18 @@ phase7_vpn_setup() {
     
     log_info "Enter your NordVPN service credentials"
     log_info "(Find these in your NordVPN dashboard under 'Manual Setup')"
-    read -t 10 -p "NordVPN service username [8x8ZuVWfXrbbbc8jTpapJ9GS]: " NORD_USER || true
-    NORD_USER=${NORD_USER:-8x8ZuVWfXrbbbc8jTpapJ9GS}
+    read -t 10 -p "NordVPN service username: " NORD_USER || true
+    if [ -z "$NORD_USER" ]; then
+        log_error "NordVPN username is required"
+        exit 1
+    fi
     
-    read -t 10 -sp "NordVPN service password [****hidden****]: " NORD_PASS || true
-    NORD_PASS=${NORD_PASS:-9ifbQYEPfco2ye8RJpxco8nt}
+    read -t 10 -sp "NordVPN service password: " NORD_PASS || true
     echo
+    if [ -z "$NORD_PASS" ]; then
+        log_error "NordVPN password is required"
+        exit 1
+    fi
     
     log_info "Creating credentials file..."
     cat > /etc/openvpn/nordvpn-credentials << EOF
@@ -782,8 +794,8 @@ EOF
         nmcli device set wlan1 managed no 2>/dev/null || true
         
         # Disconnect any active connections on wireless interfaces
-        nmcli connection down "PenthouseWiFi" 2>/dev/null || true
         nmcli device disconnect wlan0 2>/dev/null || true
+        nmcli device disconnect wlan1 2>/dev/null || true
         
         # Reload NetworkManager config without full restart (keeps eth0 stable)
         nmcli general reload 2>/dev/null || true
@@ -955,6 +967,21 @@ phase12_verification() {
         log_warning "Installation completed with warnings"
         log_warning "=========================================="
     fi
+    
+    # Run comprehensive health check
+    echo ""
+    log_info "Running comprehensive health check..."
+    echo ""
+    
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    if [ -f "$SCRIPT_DIR/router-health.sh" ]; then
+        bash "$SCRIPT_DIR/router-health.sh"
+    elif [ -f "$(dirname "$SCRIPT_DIR")/scripts/router-health.sh" ]; then
+        bash "$(dirname "$SCRIPT_DIR")/scripts/router-health.sh"
+    else
+        log_warning "Health check script not found, skipping detailed diagnostics"
+        log_info "You can manually run: sudo bash scripts/router-health.sh"
+    fi
 }
 
 ###############################################################################
@@ -1042,9 +1069,10 @@ main() {
     echo "  SSH: ssh pi@192.168.100.2 (via Ethernet)"
     echo ""
     echo "Helper Scripts:"
-    echo "  - ./connect-wifi.sh - Connect to new WiFi"
-    echo "  - ./change-vpn.sh - Change VPN server"
-    echo "  - ./router-status.sh - Check system status"
+    echo "  - ./scripts/router-health.sh - Comprehensive health check"
+    echo "  - ./scripts/connect-wifi.sh - Connect to new WiFi"
+    echo "  - ./scripts/change-vpn.sh - Change VPN server"
+    echo "  - ./scripts/router-status.sh - Check system status"
     echo ""
     log_info "Full installation log: $LOGFILE"
     echo "=========================================="
