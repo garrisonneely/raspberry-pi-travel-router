@@ -30,9 +30,13 @@ A portable VPN router that:
 ### 1.2 Download Raspberry Pi OS
 
 1. Download **Raspberry Pi Imager**: https://www.raspberrypi.com/software/
-2. Or download **Raspberry Pi OS Lite (64-bit)** directly: https://www.raspberrypi.com/software/operating-systems/
+2. Or download **Raspberry Pi OS** directly: https://www.raspberrypi.com/software/operating-systems/
 
-**Recommended**: Use the Lite version (no desktop) for better performance.
+**Recommended**: 
+- **Desktop OS** for troubleshooting with GUI access (easier debugging)
+- **Lite OS** for production use (better performance, lower resource usage)
+
+Both versions are fully supported by the installation script.
 
 ## Phase 2: Flash the Operating System
 
@@ -40,7 +44,9 @@ A portable VPN router that:
 
 1. **Launch Raspberry Pi Imager**
 2. Click **"Choose Device"** → Select "Raspberry Pi 4"
-3. Click **"Choose OS"** → "Raspberry Pi OS (other)" → "Raspberry Pi OS Lite (64-bit)"
+3. Click **"Choose OS"** → 
+   - For Desktop: "Raspberry Pi OS (64-bit)"
+   - For Lite: "Raspberry Pi OS (other)" → "Raspberry Pi OS Lite (64-bit)"
 4. Click **"Choose Storage"** → Select your microSD card
 5. Click the **⚙️ gear icon** (or press `Ctrl+Shift+X`) for advanced options:
 
@@ -268,6 +274,22 @@ cd ~/raspberry-pi-travel-router
 sudo bash scripts/install.sh
 ```
 
+**Installation Modes:**
+
+The script offers two modes at startup:
+- **Install Mode** (default): Normal installation - press Enter or wait 10 seconds
+- **Reset Mode**: Clean up previous installation - press 'r' within 10 seconds
+
+**Reset mode will:**
+- Stop and disable all services
+- Remove driver modules
+- Clean up all configuration files
+- Restore backups
+- Clear iptables rules
+- Reset NetworkManager to defaults
+
+Use reset mode if you need to start fresh without re-imaging the SD card.
+
 ### 7.3 Installation Phases
 
 The installation script runs through 12 distinct phases:
@@ -275,7 +297,8 @@ The installation script runs through 12 distinct phases:
 **Phase 1: System Preparation - BEGIN**
 - Updates package lists and system packages
 - Installs required packages (git, dkms, hostapd, dnsmasq, openvpn, etc.)
-- **🔧 ETHERNET STATIC IP CONFIGURED**: eth0 set to 192.168.100.2/24
+- **🔧 ETHERNET STATIC IP CONFIGURED**: eth0 set to 192.168.100.2/24 via NetworkManager
+- **Note**: Uses NetworkManager for modern, Desktop OS-compatible network management
 - **Recommended**: After Phase 1, connect your computer to the Pi via Ethernet cable
 - This provides reliable SSH access for the remaining phases
 - Time: 2-5 minutes
@@ -293,9 +316,9 @@ The installation script runs through 12 distinct phases:
 - After reboot: SSH back in and re-run `sudo bash scripts/install.sh` to continue
 
 **Phase 3: Network Interface Configuration - BEGIN**
-- Configures static IP addresses for all interfaces
+- Configures network interface settings
 - Sets up wlan0 (Access Point): 192.168.4.1/24
-- Sets up eth0 (Management): 192.168.100.2/24 (already active from Phase 1)
+- Sets up eth0 (Management): 192.168.100.2/24 (already active from Phase 1 via NetworkManager)
 - Configures wlan1 (WiFi client) interface
 - **⚠️ IMPORTANT**: Configuration is written but NOT applied yet (except eth0 which is already set)
 - Remaining static IPs will be applied when services start in Phase 11

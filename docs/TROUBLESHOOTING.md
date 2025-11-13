@@ -322,6 +322,86 @@ dig +short myip.opendns.com @resolver1.opendns.com
    sudo systemctl restart dnsmasq
    ```
 
+## NetworkManager Conflicts (Desktop OS)
+
+### System Becomes Unresponsive After Reboot
+
+**Symptoms**: 
+- Pi responds to 3-4 pings then stops
+- SSH cannot connect or disconnects immediately
+- Ethernet becomes unreliable
+
+**Cause**: NetworkManager and systemd-networkd both trying to manage eth0
+
+**Solution - Use Reset Mode**:
+```bash
+# SSH in via Ethernet (192.168.100.2) if possible
+# Or connect monitor/keyboard to Pi
+
+# Run installation script in reset mode
+cd ~/raspberry-pi-travel-router
+sudo bash scripts/install.sh
+# Press 'r' within 10 seconds when prompted
+
+# Then reboot
+sudo reboot
+
+# After reboot, run installation again (fresh start)
+sudo bash scripts/install.sh
+# Press Enter for Install mode
+```
+
+**Manual Fix** (if reset doesn't work):
+```bash
+# Stop systemd-networkd (conflicts with NetworkManager on Desktop OS)
+sudo systemctl stop systemd-networkd
+sudo systemctl disable systemd-networkd
+
+# Remove conflicting config
+sudo rm -f /etc/systemd/network/10-eth0.network
+
+# Configure eth0 via NetworkManager instead
+sudo nmcli connection modify "Wired connection 1" ipv4.addresses 192.168.100.2/24
+sudo nmcli connection modify "Wired connection 1" ipv4.method manual
+sudo nmcli connection up "Wired connection 1"
+
+# Reboot
+sudo reboot
+```
+
+### Wireless Interfaces Not Starting
+
+**Symptoms**: hostapd or wpa_supplicant won't start, interfaces remain down
+
+**Cause**: NetworkManager still managing wlan0/wlan1
+
+**Check**:
+```bash
+nmcli device status
+# Should show wlan0 and wlan1 as "unmanaged"
+```
+
+**Solution**:
+```bash
+# Force NetworkManager to release wireless interfaces
+sudo nmcli device set wlan0 managed no
+sudo nmcli device set wlan1 managed no
+
+# Create persistent unmanaged config
+sudo mkdir -p /etc/NetworkManager/conf.d
+sudo bash -c 'cat > /etc/NetworkManager/conf.d/unmanaged.conf << "EOF"
+[keyfile]
+unmanaged-devices=interface-name:wlan0;interface-name:wlan1
+EOF'
+
+# Reload NetworkManager
+sudo nmcli general reload
+
+# Restart services
+sudo systemctl restart hostapd
+sudo systemctl restart wpa_supplicant@wlan1
+```
+
 ## Network Connectivity
 
 ### Clients Get IP But No Internet
@@ -473,6 +553,35 @@ ip addr > network.txt
 ip route >> network.txt
 sudo iptables -L -n -v >> network.txt
 ```
+
+### Reset Installation Without Re-imaging
+
+If you need to start completely fresh without re-flashing the SD card:
+
+```bash
+cd ~/raspberry-pi-travel-router
+sudo bash scripts/install.sh
+# Press 'r' within 10 seconds when prompted for Reset mode
+
+# After reset completes, reboot
+sudo reboot
+
+# Then run installation again
+cd ~/raspberry-pi-travel-router
+sudo bash scripts/install.sh
+# Press Enter for Install mode
+```
+
+**Reset mode cleans up:**
+- ✓ Stops and disables all services
+- ✓ Removes DKMS driver modules
+- ✓ Deletes all configuration files
+- ✓ Restores backup configurations
+- ✓ Clears iptables rules
+- ✓ Resets NetworkManager to defaults
+- ✓ Removes state tracking file
+
+This is much faster than re-imaging and preserves your base OS configuration.
 
 ### Useful Commands
 

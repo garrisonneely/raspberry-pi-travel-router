@@ -31,6 +31,90 @@ exec > >(tee -a "$LOGFILE") 2>&1
 STATE_FILE="/var/lib/travel-router-install.state"
 
 ###############################################################################
+# Phase 0: Reset/Cleanup Function
+###############################################################################
+
+phase0_reset() {
+    log_warning "=========================================="
+    log_warning "RESET MODE: Cleaning up previous installation"
+    log_warning "=========================================="
+    
+    log_info "Stopping services..."
+    systemctl stop hostapd 2>/dev/null || true
+    systemctl stop dnsmasq 2>/dev/null || true
+    systemctl stop wpa_supplicant@wlan1 2>/dev/null || true
+    systemctl stop openvpn@nordvpn 2>/dev/null || true
+    systemctl stop systemd-networkd 2>/dev/null || true
+    
+    log_info "Disabling services..."
+    systemctl disable hostapd 2>/dev/null || true
+    systemctl disable dnsmasq 2>/dev/null || true
+    systemctl disable wpa_supplicant@wlan1 2>/dev/null || true
+    systemctl disable openvpn@nordvpn 2>/dev/null || true
+    systemctl disable systemd-networkd 2>/dev/null || true
+    
+    log_info "Removing DKMS driver modules..."
+    # Remove both possible drivers
+    dkms remove rtl8814au/5.8.5.1 --all 2>/dev/null || true
+    dkms remove rtl8812au/5.13.6 --all 2>/dev/null || true
+    
+    log_info "Removing driver source directories..."
+    rm -rf /usr/src/rtl8814au-5.8.5.1 2>/dev/null || true
+    rm -rf /usr/src/rtl8812au-5.13.6 2>/dev/null || true
+    rm -rf /tmp/8814au 2>/dev/null || true
+    rm -rf /tmp/8812au-20210820 2>/dev/null || true
+    
+    log_info "Removing configuration files..."
+    rm -f /etc/hostapd/hostapd.conf 2>/dev/null || true
+    rm -f /etc/dnsmasq.conf 2>/dev/null || true
+    rm -f /etc/wpa_supplicant/wpa_supplicant-wlan1.conf 2>/dev/null || true
+    rm -f /etc/openvpn/nordvpn.conf 2>/dev/null || true
+    rm -f /etc/openvpn/nordvpn.auth 2>/dev/null || true
+    rm -f /etc/default/hostapd 2>/dev/null || true
+    
+    log_info "Removing NetworkManager configurations..."
+    rm -f /etc/NetworkManager/conf.d/unmanaged.conf 2>/dev/null || true
+    rm -f /etc/NetworkManager/conf.d/10-unmanaged-eth0.conf 2>/dev/null || true
+    rm -f /etc/NetworkManager/system-connections/eth0-static.nmconnection 2>/dev/null || true
+    
+    log_info "Removing systemd-networkd configurations..."
+    rm -f /etc/systemd/network/10-eth0.network 2>/dev/null || true
+    
+    log_info "Restoring backup files..."
+    if [ -f /etc/dhcpcd.conf.backup ]; then
+        mv /etc/dhcpcd.conf.backup /etc/dhcpcd.conf
+    fi
+    if [ -f /etc/sysctl.conf.backup ]; then
+        mv /etc/sysctl.conf.backup /etc/sysctl.conf
+    fi
+    
+    log_info "Flushing iptables rules..."
+    iptables -F 2>/dev/null || true
+    iptables -t nat -F 2>/dev/null || true
+    iptables -X 2>/dev/null || true
+    iptables -t nat -X 2>/dev/null || true
+    netfilter-persistent save 2>/dev/null || true
+    
+    log_info "Removing state file..."
+    rm -f "$STATE_FILE" 2>/dev/null || true
+    
+    log_info "Restarting NetworkManager to restore defaults..."
+    systemctl restart NetworkManager 2>/dev/null || true
+    
+    log_info "Bringing interfaces down..."
+    ip link set wlan0 down 2>/dev/null || true
+    ip link set wlan1 down 2>/dev/null || true
+    
+    log_success "=========================================="
+    log_success "Reset complete! System is now clean."
+    log_success "=========================================="
+    log_info "You can now run this script again for a fresh installation."
+    log_info "Reboot recommended: sudo reboot"
+    
+    exit 0
+}
+
+###############################################################################
 # Helper Functions
 ###############################################################################
 
@@ -108,25 +192,43 @@ phase1_system_prep() {
         { log_error "Failed to install required packages"; exit 1; }
     
     log_info "Configuring ethernet static IP for management access..."
-    # Apply static IP to eth0 immediately for reliable SSH access
-    ip addr add 192.168.100.2/24 dev eth0 2>/dev/null || true
     
-    # Make eth0 IP persistent across reboots using systemd-networkd configuration
-    log_info "Creating persistent network configuration for eth0..."
-    mkdir -p /etc/systemd/network
-    cat > /etc/systemd/network/10-eth0.network << 'EOF'
-[Match]
-Name=eth0
-
-[Network]
-Address=192.168.100.2/24
-EOF
+    # Configure eth0 with static IP using NetworkManager (modern, Desktop OS compatible)
+    log_info "Configuring eth0 with NetworkManager..."
     
-    # Enable systemd-networkd if not already enabled
-    systemctl enable systemd-networkd 2>/dev/null || true
-    systemctl start systemd-networkd 2>/dev/null || true
+    # First, ensure NetworkManager is managing eth0 (remove any unmanaged config)
+    rm -f /etc/NetworkManager/conf.d/10-unmanaged-eth0.conf 2>/dev/null || true
     
-    log_success "Ethernet configured with static IP: 192.168.100.2"
+    # Get the current wired connection name (usually "Wired connection 1")
+    ETH0_CONNECTION=$(nmcli -t -f NAME,DEVICE connection show | grep "eth0" | cut -d: -f1 | head -n1)
+    
+    if [ -z "$ETH0_CONNECTION" ]; then
+        log_info "No existing connection found, creating new connection for eth0..."
+        nmcli connection add type ethernet con-name "eth0-static" ifname eth0 \
+            ipv4.addresses 192.168.100.2/24 \
+            ipv4.method manual \
+            connection.autoconnect yes
+        ETH0_CONNECTION="eth0-static"
+    else
+        log_info "Found existing connection: $ETH0_CONNECTION"
+        # Modify existing connection to use static IP
+        nmcli connection modify "$ETH0_CONNECTION" \
+            ipv4.addresses 192.168.100.2/24 \
+            ipv4.method manual \
+            connection.autoconnect yes
+    fi
+    
+    # Apply the connection immediately
+    nmcli connection up "$ETH0_CONNECTION" 2>/dev/null || true
+    
+    # Ensure systemd-networkd is disabled (NetworkManager is in control)
+    systemctl stop systemd-networkd 2>/dev/null || true
+    systemctl disable systemd-networkd 2>/dev/null || true
+    
+    # Remove any conflicting systemd-networkd configs
+    rm -f /etc/systemd/network/10-eth0.network 2>/dev/null || true
+    
+    log_success "Ethernet configured with static IP: 192.168.100.2 (via NetworkManager)"
     log_success "Configuration persists across reboots"
     log_warning "You can now connect via Ethernet using: ssh pi@192.168.100.2"
     log_info "Recommended: Switch to Ethernet connection before Phase 2 to avoid WiFi disruptions"
@@ -668,14 +770,14 @@ phase11_start_services() {
     if systemctl is-active --quiet NetworkManager; then
         log_info "Forcing NetworkManager to release wireless interfaces..."
         
-        # Create unmanaged config
+        # Create unmanaged config for wireless interfaces only (eth0 stays managed)
         mkdir -p /etc/NetworkManager/conf.d
         cat > /etc/NetworkManager/conf.d/unmanaged.conf << 'EOF'
 [keyfile]
 unmanaged-devices=interface-name:wlan0;interface-name:wlan1
 EOF
         
-        # Force NetworkManager to immediately unmanage the interfaces
+        # Force NetworkManager to immediately unmanage the wireless interfaces
         nmcli device set wlan0 managed no 2>/dev/null || true
         nmcli device set wlan1 managed no 2>/dev/null || true
         
@@ -683,25 +785,28 @@ EOF
         nmcli connection down "PenthouseWiFi" 2>/dev/null || true
         nmcli device disconnect wlan0 2>/dev/null || true
         
+        # Reload NetworkManager config without full restart (keeps eth0 stable)
+        nmcli general reload 2>/dev/null || true
+        
         log_success "NetworkManager released wireless interfaces"
         sleep 2
     fi
     
-    # Bring down interfaces to reset them
+    # Bring down wireless interfaces to reset them
     ip link set wlan0 down 2>/dev/null || true
     ip link set wlan1 down 2>/dev/null || true
     sleep 1
     
-    # Restart network management if using dhcpcd
+    # Only restart dhcpcd if it exists and is active
     if systemctl list-unit-files | grep -q "^dhcpcd.service"; then
-        log_info "Restarting dhcpcd..."
-        systemctl restart dhcpcd
-        sleep 3
-    else
-        log_info "dhcpcd not in use, skipping restart"
+        if systemctl is-active --quiet dhcpcd; then
+            log_info "Restarting dhcpcd..."
+            systemctl restart dhcpcd
+            sleep 3
+        fi
     fi
     
-    # Configure wlan0 with static IP
+    # Configure wlan0 with static IP for AP
     log_info "Configuring wlan0 with static IP..."
     ip addr flush dev wlan0 2>/dev/null || true
     ip link set wlan0 up
@@ -761,10 +866,15 @@ EOF
     systemctl restart openvpn@nordvpn
     sleep 10
     
-    # Static IP already applied in Phase 1, just verify it's still set
+    # Verify eth0 static IP is still set (managed by NetworkManager)
     if ! ip addr show eth0 | grep -q "192.168.100.2"; then
-        log_info "Ensuring static IP on eth0..."
-        ip addr add 192.168.100.2/24 dev eth0 2>/dev/null || true
+        log_warning "eth0 static IP not found, checking NetworkManager..."
+        # This shouldn't happen if Phase 1 configured it correctly
+        nmcli connection up "eth0-static" 2>/dev/null || \
+        nmcli connection up "Wired connection 1" 2>/dev/null || \
+        log_error "Failed to activate eth0 connection via NetworkManager"
+    else
+        log_success "eth0 static IP verified: 192.168.100.2"
     fi
     
     mark_phase_complete "phase11"
@@ -860,6 +970,23 @@ main() {
     
     check_root
     check_raspberry_pi
+    
+    # Offer reset option at the start
+    echo ""
+    log_info "Choose installation mode:"
+    echo "  - Press 'r' within 10 seconds for RESET (clean up previous installation)"
+    echo "  - Press Enter or wait 10 seconds for INSTALL (default)"
+    echo ""
+    
+    read -t 10 -n 1 -p "$(echo -e ${YELLOW}Mode [Install/reset]:${NC} )" MODE_CHOICE || true
+    echo ""
+    
+    if [[ "$MODE_CHOICE" =~ ^[Rr]$ ]]; then
+        log_info "Reset mode selected"
+        phase0_reset
+    fi
+    
+    log_info "Install mode selected (default)"
     
     # Show installation status if any phases are complete
     if [ -f "$STATE_FILE" ]; then
