@@ -40,10 +40,14 @@ phase0_reset() {
     log_warning "=========================================="
     
     log_info "Stopping services..."
+    systemctl stop openvpn@nordvpn 2>/dev/null || true
+    systemctl stop wpa_supplicant@wlan1 2>/dev/null || true
     systemctl stop hostapd 2>/dev/null || true
     systemctl stop dnsmasq 2>/dev/null || true
-    systemctl stop wpa_supplicant@wlan1 2>/dev/null || true
-    systemctl stop openvpn@nordvpn 2>/dev/null || true
+    
+    log_info "Killing DHCP clients..."
+    pkill -f "dhcpcd.*wlan1" 2>/dev/null || true
+    pkill -f "dhclient.*wlan1" 2>/dev/null || true
     systemctl stop systemd-networkd 2>/dev/null || true
     
     log_info "Disabling services..."
@@ -282,11 +286,16 @@ phase2_wifi_driver() {
         DRIVER_NAME="8812au"
         DRIVER_DIR="8812au-20210820"
     else
-        log_warning "Could not auto-detect USB WiFi adapter chipset"
-        log_info "Using default RTL8812AU driver"
-        DRIVER_REPO="https://github.com/morrownr/8812au-20210820.git"
-        DRIVER_NAME="8812au"
-        DRIVER_DIR="8812au-20210820"
+        log_error "FATAL: No supported USB WiFi adapter detected"
+        log_error "Supported adapters:"
+        log_error "  - Netgear A7000 (RTL8814AU chipset)"
+        log_error "  - RTL8812AU chipset adapters"
+        log_error ""
+        log_error "Connected USB devices:"
+        lsusb
+        log_error ""
+        log_error "Please connect a supported USB WiFi adapter and reboot"
+        exit 1
     fi
     
     log_info "Checking for existing driver installation..."
@@ -333,6 +342,14 @@ phase2_wifi_driver() {
     log_info "  cd ~/raspberry-pi-travel-router"
     log_info "  sudo bash scripts/install.sh"
     log_info "=========================================="
+    
+    # Verify wlan1 will exist after reboot by checking driver compilation
+    if [ ! -d "/var/lib/dkms/$DRIVER_NAME" ]; then
+        log_error "FATAL: Driver DKMS installation failed"
+        log_error "The wlan1 interface will not be available after reboot"
+        log_error "Check /var/log/travel-router-install.log for details"
+        exit 1
+    fi
     
     read -p "$(echo -e ${YELLOW}Press Enter to reboot now...${NC} )"
     reboot
@@ -866,26 +883,57 @@ EOF
     
     # Verify wlan1 connection
     log_info "Waiting for wlan1 to connect..."
+    WIFI_CONNECTED=false
     for i in {1..10}; do
         if iw wlan1 link | grep -q "Connected"; then
             log_success "wlan1 connected successfully"
+            WIFI_CONNECTED=true
             break
         fi
         log_info "Waiting for connection... ($i/10)"
         sleep 2
     done
     
+    if [ "$WIFI_CONNECTED" = false ]; then
+        log_error "FATAL: wlan1 failed to connect to WiFi"
+        log_error "SSID: $WIFI_SSID"
+        log_error ""
+        log_error "Possible causes:"
+        log_error "  - Incorrect WiFi password"
+        log_error "  - SSID not in range"
+        log_error "  - WiFi network issues"
+        log_error ""
+        log_error "Check wpa_supplicant logs:"
+        log_error "  sudo journalctl -u wpa_supplicant@wlan1 -n 50"
+        log_error ""
+        log_error "To retry with different credentials:"
+        log_error "  sudo rm /var/lib/travel-router-install.state"
+        log_error "  sudo bash scripts/install.sh"
+        exit 1
+    fi
+    
     # Request DHCP lease for wlan1
     log_info "Requesting DHCP lease for wlan1..."
-    if systemctl is-active --quiet dhcpcd; then
-        # If dhcpcd is running, restart it to pick up wlan1
-        systemctl restart dhcpcd
+    
+    # Try dhcpcd first (most common on Raspberry Pi OS)
+    if command -v dhcpcd &> /dev/null; then
+        log_info "Using dhcpcd for DHCP..."
+        # Kill any existing dhcpcd for wlan1
+        pkill -f "dhcpcd.*wlan1" 2>/dev/null || true
+        sleep 1
+        # Start dhcpcd for wlan1 in background
+        dhcpcd -b wlan1
         sleep 5
-    else
-        # Use dhclient directly (common on systems without dhcpcd)
+    elif command -v dhclient &> /dev/null; then
+        log_info "Using dhclient for DHCP..."
         pkill -f "dhclient.*wlan1" 2>/dev/null || true
+        sleep 1
         dhclient -v wlan1 &
         sleep 5
+    else
+        log_error "No DHCP client found (dhcpcd or dhclient)"
+        log_error "Install with: apt install -y isc-dhcp-client"
+        exit 1
     fi
     
     # Verify wlan1 got an IP
@@ -893,14 +941,74 @@ EOF
     if [ -n "$wlan1_ip" ]; then
         log_success "wlan1 received IP: $wlan1_ip"
     else
-        log_warning "wlan1 did not receive IP via DHCP"
-        log_warning "This may cause VPN connection issues"
-        log_info "You can manually fix this later with: sudo dhclient wlan1"
+        log_error "FATAL: wlan1 did not receive IP address via DHCP"
+        log_error ""
+        log_error "Connected to WiFi but no IP assigned. Possible causes:"
+        log_error "  - Hotel network requires captive portal authentication"
+        log_error "  - DHCP server not responding"
+        log_error "  - MAC address filtering on network"
+        log_error "  - Network requires static IP assignment"
+        log_error ""
+        log_error "Debug information:"
+        log_error "  WiFi connection: $(iw wlan1 link | grep SSID | awk '{print $2}')"
+        log_error "  Signal level: $(iw wlan1 link | grep signal | awk '{print $2, $3}')"
+        log_error ""
+        log_error "Next steps:"
+        log_error "  1. Check if network requires browser authentication"
+        log_error "  2. Verify network allows your device's MAC address"
+        log_error "  3. Try different WiFi network"
+        log_error ""
+        log_error "Check DHCP logs: sudo journalctl | grep dhcp | tail -30"
+        exit 1
     fi
     
     log_info "Starting OpenVPN..."
     systemctl restart openvpn@nordvpn
     sleep 10
+    
+    # Verify VPN tunnel is up (CRITICAL)
+    log_info "Verifying VPN tunnel..."
+    if systemctl is-active --quiet openvpn@nordvpn; then
+        log_success "VPN service is running"
+        
+        # Check for tun0 interface
+        VPN_RETRIES=0
+        while [ $VPN_RETRIES -lt 6 ]; do
+            if ip link show tun0 &> /dev/null; then
+                tun0_ip=$(ip addr show tun0 | grep "inet " | awk '{print $2}')
+                if [ -n "$tun0_ip" ]; then
+                    log_success "VPN tunnel active: $tun0_ip"
+                    break
+                fi
+            fi
+            VPN_RETRIES=$((VPN_RETRIES + 1))
+            log_info "Waiting for VPN tunnel... ($VPN_RETRIES/6)"
+            sleep 5
+        done
+        
+        if [ $VPN_RETRIES -eq 6 ]; then
+            log_error "FATAL: VPN service running but tun0 interface not created"
+            log_error ""
+            log_error "Possible causes:"
+            log_error "  - Invalid NordVPN credentials"
+            log_error "  - NordVPN server unreachable"
+            log_error "  - OpenVPN configuration error"
+            log_error ""
+            log_error "Check logs: sudo journalctl -u openvpn@nordvpn -n 50"
+            exit 1
+        fi
+    else
+        log_error "FATAL: VPN service failed to start"
+        log_error ""
+        log_error "Check logs for errors:"
+        log_error "  sudo journalctl -u openvpn@nordvpn -n 50"
+        log_error ""
+        log_error "Common issues:"
+        log_error "  - Invalid NordVPN credentials"
+        log_error "  - Missing OpenVPN configuration files"
+        log_error "  - Network connectivity issues"
+        exit 1
+    fi
     
     # Verify eth0 static IP is still set (managed by NetworkManager)
     if ! ip addr show eth0 | grep -q "192.168.100.2"; then
@@ -965,17 +1073,42 @@ phase12_verification() {
         ssid=$(iw wlan1 link | grep SSID | awk '{print $2}')
         log_success "wlan1 connected to: $ssid"
     else
-        log_warning "wlan1 not connected to WiFi"
+        log_error "FATAL: wlan1 not connected to WiFi"
+        exit 1
     fi
     
     echo ""
-    log_info "Checking internet connectivity..."
-    if ping -c 3 -W 5 8.8.8.8 &> /dev/null; then
-        log_success "Internet connectivity: OK"
-    else
-        log_warning "Internet connectivity: FAILED"
-        log_info "This may be normal if VPN is still connecting"
+    log_info "Checking internet connectivity through VPN..."
+    INTERNET_OK=false
+    for attempt in {1..3}; do
+        if ping -c 2 -W 5 8.8.8.8 &> /dev/null; then
+            log_success "Internet connectivity: OK"
+            INTERNET_OK=true
+            break
+        fi
+        log_info "Attempt $attempt/3 failed, retrying..."
+        sleep 3
+    done
+    
+    if [ "$INTERNET_OK" = false ]; then
+        log_error "FATAL: No internet connectivity through VPN"
+        log_error ""
+        log_error "The travel router is non-functional without internet access"
+        log_error ""
+        log_error "Check routing:"
+        log_error "  ip route show"
+        log_error "Check VPN tunnel:"
+        log_error "  ip addr show tun0"
+        log_error "Check firewall rules:"
+        log_error "  sudo iptables -t nat -L -v -n"
+        log_error ""
+        log_error "To debug:"
+        log_error "  sudo bash scripts/router-health.sh"
+        exit 1
     fi
+    
+    echo ""
+    log_info "Final verification complete - all critical components operational"
     
     echo ""
     if [ "$all_good" = true ]; then
@@ -1023,6 +1156,42 @@ phase12_verification() {
         log_warning "Health check script not found"
         log_info "You can manually run: sudo bash ~/raspberry-pi-travel-router/scripts/router-health.sh"
     fi
+    
+    # Install network initialization service for reboot persistence
+    echo ""
+    log_info "Installing network initialization service..."
+    
+    # Copy the init script to system location
+    INIT_SCRIPT="$SCRIPT_DIR/travel-router-network-init.sh"
+    if [ ! -f "$INIT_SCRIPT" ]; then
+        # Try alternative path
+        INIT_SCRIPT="./scripts/travel-router-network-init.sh"
+    fi
+    
+    if [ -f "$INIT_SCRIPT" ]; then
+        cp "$INIT_SCRIPT" /usr/local/bin/travel-router-network-init.sh
+        chmod +x /usr/local/bin/travel-router-network-init.sh
+        
+        # Copy and enable service
+        SERVICE_FILE="$SCRIPT_DIR/../config/travel-router-network.service"
+        if [ ! -f "$SERVICE_FILE" ]; then
+            SERVICE_FILE="./config/travel-router-network.service"
+        fi
+        
+        if [ -f "$SERVICE_FILE" ]; then
+            cp "$SERVICE_FILE" /etc/systemd/system/
+            systemctl daemon-reload
+            systemctl enable travel-router-network.service
+            log_success "Network initialization service installed"
+        else
+            log_warning "Service file not found, skipping service installation"
+        fi
+    else
+        log_warning "Init script not found, skipping service installation"
+    fi
+    
+    echo ""
+    log_success "Travel router setup complete!"
 }
 
 ###############################################################################

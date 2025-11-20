@@ -1,0 +1,15 @@
+[Unit]
+Description=Travel Router Network Initialization
+After=network-pre.target wpa_supplicant@wlan1.service
+Before=network-online.target openvpn@nordvpn.service
+Wants=wpa_supplicant@wlan1.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/travel-router-network-init.sh
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
