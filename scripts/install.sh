@@ -76,10 +76,20 @@ phase0_reset() {
     rm -f /etc/openvpn/nordvpn.auth 2>/dev/null || true
     rm -f /etc/default/hostapd 2>/dev/null || true
     
+    # CRITICAL: Save current WiFi connection info BEFORE removing configs
+    log_info "Saving current WiFi connection information..."
+    CURRENT_WIFI_SSID=""
+    CURRENT_WIFI_CONNECTION=""
+    if nmcli -t -f NAME,DEVICE connection show --active | grep -q "wlan0"; then
+        CURRENT_WIFI_CONNECTION=$(nmcli -t -f NAME,DEVICE connection show --active | grep "wlan0" | cut -d: -f1 | head -n1)
+        CURRENT_WIFI_SSID=$(nmcli -t -f GENERAL.CONNECTION,GENERAL.DEVICES dev show wlan0 2>/dev/null | grep "GENERAL.CONNECTION" | cut -d: -f2)
+        log_info "Found active WiFi connection: $CURRENT_WIFI_CONNECTION on wlan0"
+    fi
+    
     log_info "Removing NetworkManager configurations..."
-    rm -f /etc/NetworkManager/conf.d/unmanaged.conf 2>/dev/null || true
     rm -f /etc/NetworkManager/conf.d/10-unmanaged-eth0.conf 2>/dev/null || true
     rm -f /etc/NetworkManager/system-connections/eth0-static.nmconnection 2>/dev/null || true
+    # NOTE: Keep unmanaged.conf if it exists to prevent NetworkManager conflicts
     
     log_info "Removing systemd-networkd configurations..."
     rm -f /etc/systemd/network/10-eth0.network 2>/dev/null || true
@@ -108,8 +118,8 @@ phase0_reset() {
     rm -f /usr/local/bin/travel-router-network-init.sh 2>/dev/null || true
     systemctl daemon-reload 2>/dev/null || true
     
-    log_info "Restarting NetworkManager..."
-    systemctl restart NetworkManager 2>/dev/null || true
+    log_info "Reloading NetworkManager (not restarting to preserve WiFi)..."
+    systemctl reload NetworkManager 2>/dev/null || true
     sleep 2
     
     log_info "Configuring eth0 with static IP 192.168.100.2..."
@@ -148,21 +158,33 @@ phase0_reset() {
     fi
     
     log_info "Bringing WiFi interfaces down..."
-    ip link set wlan0 down 2>/dev/null || true
     ip link set wlan1 down 2>/dev/null || true
+    # Keep wlan0 up if it has active connection
     
     log_info "Restoring WiFi internet connectivity for package downloads..."
-    log_info "Bringing up wlan0 (built-in WiFi)..."
-    ip link set wlan0 up 2>/dev/null || true
-    sleep 2
     
-    # Check if wlan0 is already connected to a network via NetworkManager
-    WLAN0_CONNECTION=$(nmcli -t -f NAME,DEVICE connection show --active | grep "wlan0" | cut -d: -f1 | head -n1)
+    # Check if wlan0 is already connected via NetworkManager
+    WLAN0_ACTIVE=$(nmcli -t -f NAME,DEVICE connection show --active | grep "wlan0" | cut -d: -f1 | head -n1)
     
-    if [ -n "$WLAN0_CONNECTION" ]; then
-        log_success "wlan0 already connected to: $WLAN0_CONNECTION"
-    else
-        # Prompt for WiFi credentials to restore internet connectivity
+    if [ -n "$WLAN0_ACTIVE" ]; then
+        log_success "wlan0 already connected to: $WLAN0_ACTIVE"
+    elif [ -n "$CURRENT_WIFI_CONNECTION" ]; then
+        # Try to restore the previous WiFi connection
+        log_info "Restoring previous WiFi connection: $CURRENT_WIFI_CONNECTION..."
+        nmcli connection up "$CURRENT_WIFI_CONNECTION" ifname wlan0 2>/dev/null && {
+            log_success "Restored WiFi connection: $CURRENT_WIFI_CONNECTION"
+        } || {
+            log_warning "Could not restore previous WiFi connection"
+            CURRENT_WIFI_CONNECTION=""
+        }
+    fi
+    
+    # If still not connected, prompt for credentials
+    if ! nmcli -t -f NAME,DEVICE connection show --active | grep -q "wlan0"; then
+        log_info "Bringing up wlan0 (built-in WiFi)..."
+        ip link set wlan0 up 2>/dev/null || true
+        sleep 2
+        
         echo ""
         log_warning "No active WiFi connection found on wlan0"
         log_info "To download packages, we need to connect wlan0 to WiFi"
