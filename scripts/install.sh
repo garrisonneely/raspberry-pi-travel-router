@@ -209,15 +209,6 @@ check_raspberry_pi() {
     log_info "Detected: $model"
 }
 
-prompt_continue() {
-    read -p "$(echo -e ${YELLOW}Continue? [y/N]:${NC} )" -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        log_warning "Installation cancelled by user"
-        exit 1
-    fi
-}
-
 ###############################################################################
 # Phase 1: System Preparation
 ###############################################################################
@@ -227,14 +218,29 @@ phase1_system_prep() {
     log_info "PHASE 1: System Preparation - BEGIN"
     log_info "=========================================="
     
+    # Clean up any stale apt locks that might cause hanging
+    log_info "Cleaning apt locks..."
+    rm -f /var/lib/dpkg/lock-frontend 2>/dev/null || true
+    rm -f /var/lib/dpkg/lock 2>/dev/null || true
+    rm -f /var/cache/apt/archives/lock 2>/dev/null || true
+    rm -f /var/lib/apt/lists/lock 2>/dev/null || true
+    
+    # Wait for any other apt processes to finish
+    log_info "Waiting for any running apt processes..."
+    while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || \
+          fuser /var/lib/dpkg/lock >/dev/null 2>&1; do
+        sleep 1
+    done
+    
     log_info "Updating package lists..."
-    apt update || { log_error "Failed to update package lists"; exit 1; }
+    DEBIAN_FRONTEND=noninteractive apt-get update -y || { log_error "Failed to update package lists"; exit 1; }
     
     log_info "Upgrading existing packages..."
-    apt upgrade -y || { log_error "Failed to upgrade packages"; exit 1; }
+    DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" || { log_error "Failed to upgrade packages"; exit 1; }
     
     log_info "Installing required packages..."
-    apt install -y git dkms build-essential hostapd dnsmasq openvpn unzip wget \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" \
+        git dkms build-essential hostapd dnsmasq openvpn unzip wget \
         iptables iptables-persistent rfkill net-tools wireless-tools bc \
         isc-dhcp-client || \
         { log_error "Failed to install required packages"; exit 1; }
@@ -1313,7 +1319,6 @@ main() {
     echo ""
     log_warning "Existing configurations will be backed up"
     echo ""
-    prompt_continue
     
     # Execute installation phases
     phase1_system_prep
