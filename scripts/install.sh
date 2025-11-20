@@ -151,10 +151,52 @@ phase0_reset() {
     ip link set wlan0 down 2>/dev/null || true
     ip link set wlan1 down 2>/dev/null || true
     
+    log_info "Restoring WiFi internet connectivity for package downloads..."
+    log_info "Bringing up wlan0 (built-in WiFi)..."
+    ip link set wlan0 up 2>/dev/null || true
+    sleep 2
+    
+    # Check if wlan0 is already connected to a network via NetworkManager
+    WLAN0_CONNECTION=$(nmcli -t -f NAME,DEVICE connection show --active | grep "wlan0" | cut -d: -f1 | head -n1)
+    
+    if [ -n "$WLAN0_CONNECTION" ]; then
+        log_success "wlan0 already connected to: $WLAN0_CONNECTION"
+    else
+        # Prompt for WiFi credentials to restore internet connectivity
+        echo ""
+        log_warning "No active WiFi connection found on wlan0"
+        log_info "To download packages, we need to connect wlan0 to WiFi"
+        echo ""
+        read -p "Enter WiFi network SSID: " WIFI_SSID
+        read -sp "Enter WiFi network password: " WIFI_PASSWORD
+        echo ""
+        
+        if [ -n "$WIFI_SSID" ] && [ -n "$WIFI_PASSWORD" ]; then
+            log_info "Connecting wlan0 to $WIFI_SSID..."
+            nmcli device wifi connect "$WIFI_SSID" password "$WIFI_PASSWORD" ifname wlan0 2>/dev/null || {
+                log_warning "Failed to connect to WiFi. You may need to:"
+                log_warning "  1. Connect manually using the desktop WiFi manager"
+                log_warning "  2. Or ensure you have internet via Ethernet"
+                log_warning "Then re-run: sudo bash scripts/install.sh"
+            }
+            sleep 3
+            
+            # Verify connection
+            if nmcli -t -f NAME,DEVICE connection show --active | grep -q "wlan0"; then
+                log_success "wlan0 connected successfully!"
+            else
+                log_warning "wlan0 connection status unclear - verify manually"
+            fi
+        else
+            log_warning "No WiFi credentials provided. Ensure internet via Ethernet or connect WiFi manually."
+        fi
+    fi
+    
     log_success "=========================================="
     log_success "Reset complete! System is now clean."
     log_success "=========================================="
     log_info "eth0 is set to 192.168.100.2 - you can stay connected"
+    log_info "wlan0 should be connected to WiFi for internet access"
     log_info "Run installation again: sudo bash scripts/install.sh"
     log_info "Or reboot if needed: sudo reboot"
     
