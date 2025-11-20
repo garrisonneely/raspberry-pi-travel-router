@@ -102,18 +102,61 @@ phase0_reset() {
     log_info "Removing state file..."
     rm -f "$STATE_FILE" 2>/dev/null || true
     
-    log_info "Restarting NetworkManager to restore defaults..."
-    systemctl restart NetworkManager 2>/dev/null || true
+    log_info "Removing systemd service..."
+    systemctl disable travel-router-network.service 2>/dev/null || true
+    rm -f /etc/systemd/system/travel-router-network.service 2>/dev/null || true
+    rm -f /usr/local/bin/travel-router-network-init.sh 2>/dev/null || true
+    systemctl daemon-reload 2>/dev/null || true
     
-    log_info "Bringing interfaces down..."
+    log_info "Restarting NetworkManager..."
+    systemctl restart NetworkManager 2>/dev/null || true
+    sleep 2
+    
+    log_info "Configuring eth0 with static IP 192.168.100.2..."
+    # Get the current eth0 connection name
+    ETH0_CONNECTION=$(nmcli -t -f NAME,DEVICE connection show | grep "eth0" | cut -d: -f1 | head -n1)
+    
+    if [ -z "$ETH0_CONNECTION" ]; then
+        # Create new connection if none exists
+        nmcli connection add type ethernet con-name "eth0-static" ifname eth0 \
+            ipv4.addresses 192.168.100.2/24 \
+            ipv4.gateway 192.168.100.1 \
+            ipv4.dns "8.8.8.8 8.8.4.4" \
+            ipv4.method manual \
+            connection.autoconnect yes 2>/dev/null || true
+        ETH0_CONNECTION="eth0-static"
+    else
+        # Modify existing connection
+        nmcli connection modify "$ETH0_CONNECTION" \
+            ipv4.addresses 192.168.100.2/24 \
+            ipv4.gateway 192.168.100.1 \
+            ipv4.dns "8.8.8.8 8.8.4.4" \
+            ipv4.method manual \
+            connection.autoconnect yes 2>/dev/null || true
+    fi
+    
+    # Apply the connection
+    nmcli connection up "$ETH0_CONNECTION" 2>/dev/null || true
+    sleep 2
+    
+    # Verify eth0 has the IP
+    if ip addr show eth0 | grep -q "192.168.100.2"; then
+        log_success "eth0 configured with static IP: 192.168.100.2"
+        log_info "You can reconnect via: ssh pi@192.168.100.2"
+    else
+        log_warning "eth0 static IP may need manual configuration"
+    fi
+    
+    log_info "Bringing WiFi interfaces down..."
     ip link set wlan0 down 2>/dev/null || true
     ip link set wlan1 down 2>/dev/null || true
     
     log_success "=========================================="
     log_success "Reset complete! System is now clean."
     log_success "=========================================="
-    log_info "You can now run this script again for a fresh installation."
-    log_info "Reboot recommended: sudo reboot"
+    log_info "eth0 is set to 192.168.100.2 - you can stay connected"
+    log_info "Run installation again: sudo bash scripts/install.sh"
+    log_info "Or reboot if needed: sudo reboot"
     
     exit 0
 }
