@@ -570,13 +570,13 @@ phase6_wifi_client() {
     fi
     
     log_info "Enter WiFi network credentials to connect to..."
-    read -t 10 -p "Enter WiFi network SSID: " WIFI_SSID || true
+    read -p "Enter WiFi network SSID: " WIFI_SSID
     if [ -z "$WIFI_SSID" ]; then
         log_error "WiFi SSID is required"
         exit 1
     fi
     
-    read -t 10 -sp "Enter WiFi network password: " WIFI_PASSWORD || true
+    read -sp "Enter WiFi network password: " WIFI_PASSWORD
     echo
     if [ -z "$WIFI_PASSWORD" ]; then
         log_error "WiFi password is required"
@@ -966,13 +966,33 @@ EOF
         sleep 1
         # Start dhcpcd for wlan1 in background
         dhcpcd -b wlan1
-        sleep 5
+        
+        # Wait for IP (dhcpcd can take 10-15 seconds)
+        log_info "Waiting for DHCP lease (up to 20 seconds)..."
+        for attempt in {1..20}; do
+            sleep 1
+            wlan1_ip=$(ip addr show wlan1 | grep "inet " | awk '{print $2}')
+            if [ -n "$wlan1_ip" ]; then
+                log_success "Got IP after $attempt seconds: $wlan1_ip"
+                break
+            fi
+        done
     elif command -v dhclient &> /dev/null; then
         log_info "Using dhclient for DHCP..."
         pkill -f "dhclient.*wlan1" 2>/dev/null || true
         sleep 1
         dhclient -v wlan1 &
-        sleep 5
+        
+        # Wait for IP
+        log_info "Waiting for DHCP lease (up to 20 seconds)..."
+        for attempt in {1..20}; do
+            sleep 1
+            wlan1_ip=$(ip addr show wlan1 | grep "inet " | awk '{print $2}')
+            if [ -n "$wlan1_ip" ]; then
+                log_success "Got IP after $attempt seconds: $wlan1_ip"
+                break
+            fi
+        done
     else
         log_error "No DHCP client found (dhcpcd or dhclient)"
         log_error "Install with: apt install -y isc-dhcp-client"

@@ -41,23 +41,79 @@ chmod 600 /etc/wpa_supplicant/wpa_supplicant-wlan1.conf
 echo "[INFO] Restarting wpa_supplicant..."
 systemctl restart wpa_supplicant@wlan1
 
-echo "[INFO] Waiting for connection (10 seconds)..."
-sleep 10
+echo "[INFO] Waiting for connection..."
+sleep 5
 
-echo "[INFO] Checking connection status..."
-if iw wlan1 link | grep -q "Connected"; then
-    CONNECTED_SSID=$(iw wlan1 link | grep SSID | awk '{print $2}')
-    echo "[SUCCESS] Connected to: $CONNECTED_SSID"
-    
-    echo "[INFO] Testing internet connectivity..."
-    if ping -c 3 -W 5 8.8.8.8 &> /dev/null; then
-        echo "[SUCCESS] Internet connectivity OK"
-    else
-        echo "[WARNING] No internet connectivity detected"
+# Wait for WiFi connection
+CONNECTED=false
+for i in {1..10}; do
+    if iw wlan1 link | grep -q "Connected"; then
+        CONNECTED=true
+        break
     fi
-else
+    echo "[INFO] Waiting for WiFi connection... ($i/10)"
+    sleep 2
+done
+
+if [ "$CONNECTED" = false ]; then
     echo "[ERROR] Failed to connect to: $SSID"
     echo "[INFO] Check credentials and try again"
     echo "[INFO] View logs: sudo journalctl -u wpa_supplicant@wlan1 -f"
     exit 1
 fi
+
+CONNECTED_SSID=$(iw wlan1 link | grep SSID | awk '{print $2}')
+echo "[SUCCESS] Connected to: $CONNECTED_SSID"
+
+# Request new DHCP lease
+echo "[INFO] Requesting new DHCP lease..."
+pkill -f "dhcpcd.*wlan1" 2>/dev/null || true
+pkill -f "dhclient.*wlan1" 2>/dev/null || true
+sleep 1
+
+if command -v dhcpcd &> /dev/null; then
+    dhcpcd -b wlan1
+elif command -v dhclient &> /dev/null; then
+    dhclient wlan1 &
+else
+    echo "[WARNING] No DHCP client found"
+fi
+
+# Wait for IP
+echo "[INFO] Waiting for IP address (up to 20 seconds)..."
+for attempt in {1..20}; do
+    wlan1_ip=$(ip addr show wlan1 | grep "inet " | awk '{print $2}')
+    if [ -n "$wlan1_ip" ]; then
+        echo "[SUCCESS] Got IP: $wlan1_ip"
+        break
+    fi
+    sleep 1
+done
+
+if [ -z "$wlan1_ip" ]; then
+    echo "[ERROR] Failed to get IP address"
+    echo "[INFO] Network may require captive portal authentication"
+    exit 1
+fi
+
+echo "[INFO] Testing internet connectivity..."
+if ping -c 3 -W 5 8.8.8.8 &> /dev/null; then
+    echo "[SUCCESS] Internet connectivity OK"
+    
+    echo "[INFO] Restarting VPN..."
+    systemctl restart openvpn@nordvpn
+    sleep 5
+    
+    if ip link show tun0 &> /dev/null; then
+        echo "[SUCCESS] VPN tunnel active"
+    else
+        echo "[WARNING] VPN tunnel not up yet, check: systemctl status openvpn@nordvpn"
+    fi
+else
+    echo "[WARNING] No internet connectivity"
+    echo "[INFO] Network may require browser authentication"
+fi
+
+echo ""
+echo "WiFi change complete!"
+echo "Run 'sudo bash scripts/router-status.sh' to verify full setup"
