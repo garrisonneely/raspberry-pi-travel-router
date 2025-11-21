@@ -748,6 +748,37 @@ EOF
     log_info "Updating VPN configuration to use credentials file..."
     sed -i 's/^auth-user-pass.*/auth-user-pass \/etc\/openvpn\/nordvpn-credentials/' /etc/openvpn/nordvpn.conf
     
+    log_info "Creating OpenVPN up script for NAT configuration..."
+    cat > /etc/openvpn/vpn-up.sh << 'VPNEOF'
+#!/bin/bash
+# OpenVPN up script - runs after tunnel is established
+# Apply NAT rules now that tun0 exists
+
+# Wait briefly for interface to be fully ready
+sleep 2
+
+# Ensure IP forwarding is enabled
+echo 1 > /proc/sys/net/ipv4/ip_forward
+
+# Apply NAT rules for VPN tunnel
+iptables -t nat -D POSTROUTING -o tun0 -j MASQUERADE 2>/dev/null || true
+iptables -t nat -A POSTROUTING -o tun0 -j MASQUERADE
+
+# Save rules
+mkdir -p /etc/iptables
+iptables-save > /etc/iptables/rules.v4
+
+logger "VPN up script: NAT rules applied for tun0"
+exit 0
+VPNEOF
+    chmod +x /etc/openvpn/vpn-up.sh
+    
+    log_info "Configuring OpenVPN to use up script..."
+    echo "" >> /etc/openvpn/nordvpn.conf
+    echo "# Custom routing script" >> /etc/openvpn/nordvpn.conf
+    echo "script-security 2" >> /etc/openvpn/nordvpn.conf
+    echo "up /etc/openvpn/vpn-up.sh" >> /etc/openvpn/nordvpn.conf
+    
     mark_phase_complete "phase7"
     log_success "PHASE 7: VPN Configuration - COMPLETE (Server: $VPN_SERVER)"
 }
@@ -803,9 +834,7 @@ phase8_routing_firewall() {
     mkdir -p /etc/iptables
     iptables-save > /etc/iptables/rules.v4
     
-    # Make iptables-persistent non-interactive
-    echo iptables-persistent iptables-persistent/autosave_v4 boolean true | debconf-set-selections
-    echo iptables-persistent iptables-persistent/autosave_v6 boolean true | debconf-set-selections
+    log_info "Note: NAT rules for tun0 will be applied by OpenVPN up script after tunnel is established"
     
     mark_phase_complete "phase8"
     log_success "PHASE 8: Routing and Firewall Configuration - COMPLETE"
