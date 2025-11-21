@@ -1050,9 +1050,9 @@ EOF
         # Start dhcpcd for wlan1 in background
         dhcpcd -b wlan1
         
-        # Wait for IP (dhcpcd can take 10-15 seconds)
-        log_info "Waiting for DHCP lease (up to 20 seconds)..."
-        for attempt in {1..20}; do
+        # Wait for IP (dhcpcd can take 20-30 seconds with network negotiation)
+        log_info "Waiting for DHCP lease (up to 30 seconds)..."
+        for attempt in {1..30}; do
             sleep 1
             wlan1_ip=$(ip addr show wlan1 | grep "inet " | awk '{print $2}')
             if [ -n "$wlan1_ip" ]; then
@@ -1066,9 +1066,9 @@ EOF
         sleep 1
         dhclient -v wlan1 &
         
-        # Wait for IP
-        log_info "Waiting for DHCP lease (up to 20 seconds)..."
-        for attempt in {1..20}; do
+        # Wait for IP (dhclient can take 20-30 seconds)
+        log_info "Waiting for DHCP lease (up to 30 seconds)..."
+        for attempt in {1..30}; do
             sleep 1
             wlan1_ip=$(ip addr show wlan1 | grep "inet " | awk '{print $2}')
             if [ -n "$wlan1_ip" ]; then
