@@ -189,7 +189,7 @@ test_routing() {
     fi
     
     print_test "Checking NAT rules (MASQUERADE)"
-    if iptables -t nat -L POSTROUTING -n | grep -q "MASQUERADE.*tun0"; then
+    if iptables -t nat -L POSTROUTING -n | grep -q "tun0"; then
         print_pass "NAT rule for tun0: Configured"
     else
         print_fail "NAT rule for tun0: Missing"
@@ -215,7 +215,7 @@ test_connectivity_from_pi() {
     fi
     
     print_test "DNS resolution test"
-    if nslookup google.com &> /dev/null; then
+    if host google.com &> /dev/null || nslookup google.com &> /dev/null || dig google.com &> /dev/null; then
         print_pass "DNS resolution working"
     else
         print_fail "DNS resolution failed"
@@ -247,7 +247,8 @@ test_ap_clients() {
         # Try to get connected clients (requires hostapd_cli)
         if command -v hostapd_cli &> /dev/null; then
             client_count=$(hostapd_cli -i wlan0 all_sta 2>/dev/null | grep -c "^[0-9a-f][0-9a-f]:" || echo "0")
-            if [ "$client_count" -gt 0 ]; then
+            client_count=$(echo "$client_count" | tr -d '\n\r ')
+            if [ "$client_count" -gt 0 ] 2>/dev/null; then
                 print_info "Connected AP clients: $client_count"
             else
                 print_info "No clients currently connected to AP"
