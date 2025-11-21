@@ -987,6 +987,12 @@ EOF
     
     # Bring up wlan1 for WiFi client
     log_info "Bringing up wlan1..."
+    
+    # Ensure NetworkManager is NOT managing wlan1
+    nmcli device set wlan1 managed no 2>/dev/null || true
+    nmcli device disconnect wlan1 2>/dev/null || true
+    sleep 1
+    
     ip link set wlan1 up
     sleep 2
     
@@ -1027,6 +1033,13 @@ EOF
     
     # Request DHCP lease for wlan1
     log_info "Requesting DHCP lease for wlan1..."
+    
+    # Stop any dhcpcd service that might interfere
+    if systemctl is-active --quiet dhcpcd 2>/dev/null; then
+        log_info "Stopping dhcpcd service (will use manual dhcpcd for wlan1)..."
+        systemctl stop dhcpcd
+        sleep 2
+    fi
     
     # Try dhcpcd first (most common on Raspberry Pi OS)
     if command -v dhcpcd &> /dev/null; then
