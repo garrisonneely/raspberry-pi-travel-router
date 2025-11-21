@@ -80,8 +80,8 @@ else
 fi
 
 # Wait for IP
-echo "[INFO] Waiting for IP address (up to 20 seconds)..."
-for attempt in {1..20}; do
+echo "[INFO] Waiting for IP address (up to 30 seconds)..."
+for attempt in {1..30}; do
     wlan1_ip=$(ip addr show wlan1 | grep "inet " | awk '{print $2}')
     if [ -n "$wlan1_ip" ]; then
         echo "[SUCCESS] Got IP: $wlan1_ip"
@@ -99,6 +99,18 @@ fi
 echo "[INFO] Testing internet connectivity..."
 if ping -c 3 -W 5 8.8.8.8 &> /dev/null; then
     echo "[SUCCESS] Internet connectivity OK"
+    
+    # Ensure wlan0 (AP) still has correct IP
+    echo "[INFO] Verifying Access Point configuration..."
+    wlan0_ip=$(ip addr show wlan0 | grep "inet " | awk '{print $2}')
+    if [ "$wlan0_ip" != "192.168.4.1/24" ]; then
+        echo "[INFO] Reconfiguring wlan0..."
+        ip addr flush dev wlan0 2>/dev/null || true
+        ip link set wlan0 up
+        ip addr add 192.168.4.1/24 dev wlan0
+        systemctl restart hostapd
+        systemctl restart dnsmasq
+    fi
     
     echo "[INFO] Restarting VPN..."
     systemctl restart openvpn@nordvpn
