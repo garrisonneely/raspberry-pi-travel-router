@@ -1,12 +1,21 @@
 #!/bin/bash
 #############################################
 # Travel Router Network Initialization
-# Ensures wlan1 gets DHCP after boot
+# Configures wlan0 (AP) and wlan1 (client) on boot
 #############################################
 
 set -e
 
+# Configure wlan0 for Access Point
+echo "Configuring wlan0 (Access Point)..."
+ip addr flush dev wlan0 2>/dev/null || true
+ip link set wlan0 up 2>/dev/null || true
+sleep 1
+ip addr add 192.168.4.1/24 dev wlan0 2>/dev/null || true
+echo "wlan0 configured with 192.168.4.1/24"
+
 # Wait for wlan1 to be up
+echo "Waiting for wlan1..."
 for i in {1..30}; do
     if ip link show wlan1 &>/dev/null && [ "$(cat /sys/class/net/wlan1/operstate 2>/dev/null)" = "up" ]; then
         break

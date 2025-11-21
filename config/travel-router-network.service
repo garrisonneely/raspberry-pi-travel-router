@@ -1,7 +1,7 @@
 [Unit]
 Description=Travel Router Network Initialization
 After=network-pre.target wpa_supplicant@wlan1.service
-Before=network-online.target openvpn@nordvpn.service
+Before=network-online.target hostapd.service dnsmasq.service openvpn@nordvpn.service
 Wants=wpa_supplicant@wlan1.service
 
 [Service]
