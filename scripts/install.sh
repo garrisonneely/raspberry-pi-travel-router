@@ -547,10 +547,10 @@ phase4_access_point() {
     
     # Prompt for SSID and password with timeout for defaults
     log_info "Press Enter to use default values or type custom values..."
-    read -t 5 -p "Enter Access Point SSID [GKTravelRouter]: " AP_SSID || true
+    read -t 30 -p "Enter Access Point SSID [GKTravelRouter]: " AP_SSID || true
     AP_SSID=${AP_SSID:-GKTravelRouter}
     
-    read -t 5 -p "Enter Access Point Password [CABOFUN1]: " AP_PASSWORD || true
+    read -t 30 -p "Enter Access Point Password [CABOFUN1]: " AP_PASSWORD || true
     AP_PASSWORD=${AP_PASSWORD:-CABOFUN1}
     
     # Validate password length
@@ -720,7 +720,7 @@ phase7_vpn_setup() {
     echo "  - us10356.nordvpn.com (Denver)"
     
     log_info "Press Enter to use default server or type custom server..."
-    read -t 5 -p "Enter NordVPN server [us9952.nordvpn.com]: " VPN_SERVER || true
+    read -t 30 -p "Enter NordVPN server [us9952.nordvpn.com]: " VPN_SERVER || true
     VPN_SERVER=${VPN_SERVER:-us9952.nordvpn.com}
     
     log_info "Searching for server configuration..."
@@ -738,13 +738,13 @@ phase7_vpn_setup() {
     
     log_info "Enter your NordVPN service credentials"
     log_info "(Find these in your NordVPN dashboard under 'Manual Setup')"
-    read -t 10 -p "NordVPN service username: " NORD_USER || true
+    read -t 30 -p "NordVPN service username: " NORD_USER || true
     if [ -z "$NORD_USER" ]; then
         log_error "NordVPN username is required"
         exit 1
     fi
     
-    read -t 10 -sp "NordVPN service password: " NORD_PASS || true
+    read -t 30 -sp "NordVPN service password: " NORD_PASS || true
     echo
     if [ -z "$NORD_PASS" ]; then
         log_error "NordVPN password is required"
@@ -1403,7 +1403,7 @@ main() {
     echo "  - Press Enter or wait 10 seconds for INSTALL (default)"
     echo ""
     
-    read -t 10 -n 1 -p "$(echo -e ${YELLOW}Mode [Install/reset]:${NC} )" MODE_CHOICE || true
+    read -t 30 -n 1 -p "$(echo -e ${YELLOW}Mode [Install/reset]:${NC} )" MODE_CHOICE || true
     echo ""
     
     if [[ "$MODE_CHOICE" =~ ^[Rr]$ ]]; then
