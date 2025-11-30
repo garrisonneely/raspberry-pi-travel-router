@@ -2,6 +2,39 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.0] - 2025-11-30
+
+### Added
+- Open WiFi network support (networks without passwords)
+- Health check script with comprehensive diagnostics
+- VPN routing fix script for manual NAT repair
+- Enhanced error logging and diagnostics
+- Boot persistence service for network configuration
+
+### Fixed
+- systemctl authentication prompts during service startup
+- Health check script path resolution issues
+- NAT rule detection in health checks (improved regex matching)
+- DNS resolution test reliability
+- wlan0 boot configuration persistence
+
+### Changed
+- Extended user input timeouts from 5s to 30s for better field usability
+- Improved health check to distinguish between errors and warnings
+- Enhanced fix-vpn-routing.sh with detailed diagnostic output
+
+### Improved
+- All scripts now use `--no-ask-password` flag to prevent auth hangs
+- More robust path resolution using readlink/realpath
+- Better error messages with troubleshooting steps
+- Field-tested in Mexico hotel WiFi environment
+
+### Removed
+- collect-diagnostics.sh (functionality merged into router-health.sh)
+- fix-wlan1-dhcp scripts (issues resolved in install.sh)
+- Internal documentation files (REWRITE_HISTORY.md, SETUP_CHECKLIST.md)
+- Binary documentation files (.docx, .pdf) in favor of markdown
+
 ## [1.0.0] - 2025-11-02
 
 ### Added
