@@ -10,8 +10,9 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-if [ $# -lt 2 ]; then
-    echo "Usage: sudo bash connect-wifi.sh \"WiFiName\" \"WiFiPassword\""
+if [ $# -lt 1 ]; then
+    echo "Usage: sudo bash connect-wifi.sh \"WiFiName\" [\"WiFiPassword\"]"
+    echo "  For open networks (no password), omit the password parameter"
     exit 1
 fi
 
@@ -24,7 +25,23 @@ echo "[INFO] Configuring wlan1 to connect to: $SSID"
 cp /etc/wpa_supplicant/wpa_supplicant-wlan1.conf /etc/wpa_supplicant/wpa_supplicant-wlan1.conf.backup
 
 # Update configuration
-cat > /etc/wpa_supplicant/wpa_supplicant-wlan1.conf << EOF
+if [ -z "$PASSWORD" ]; then
+    # Open network (no password)
+    echo "[INFO] Configuring for open network (no password)"
+    cat > /etc/wpa_supplicant/wpa_supplicant-wlan1.conf << EOF
+ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
+update_config=1
+country=US
+
+network={
+    ssid="$SSID"
+    key_mgmt=NONE
+    priority=1
+}
+EOF
+else
+    # Secured network (with password)
+    cat > /etc/wpa_supplicant/wpa_supplicant-wlan1.conf << EOF
 ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
 update_config=1
 country=US
@@ -35,6 +52,7 @@ network={
     priority=1
 }
 EOF
+fi
 
 chmod 600 /etc/wpa_supplicant/wpa_supplicant-wlan1.conf
 
