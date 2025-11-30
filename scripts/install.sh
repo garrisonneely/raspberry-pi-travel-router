@@ -646,15 +646,27 @@ phase6_wifi_client() {
         exit 1
     fi
     
-    read -sp "Enter WiFi network password: " WIFI_PASSWORD
+    read -sp "Enter WiFi network password (leave empty for open network): " WIFI_PASSWORD
     echo
-    if [ -z "$WIFI_PASSWORD" ]; then
-        log_error "WiFi password is required"
-        exit 1
-    fi
     
     log_info "Creating wpa_supplicant configuration for wlan1..."
-    cat > /etc/wpa_supplicant/wpa_supplicant-wlan1.conf << EOF
+    if [ -z "$WIFI_PASSWORD" ]; then
+        # Open network (no password)
+        log_info "Configuring for open network (no password)"
+        cat > /etc/wpa_supplicant/wpa_supplicant-wlan1.conf << EOF
+ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
+update_config=1
+country=US
+
+network={
+    ssid="$WIFI_SSID"
+    key_mgmt=NONE
+    priority=1
+}
+EOF
+    else
+        # Secured network (with password)
+        cat > /etc/wpa_supplicant/wpa_supplicant-wlan1.conf << EOF
 ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
 update_config=1
 country=US
@@ -665,6 +677,7 @@ network={
     priority=1
 }
 EOF
+    fi
     
     chmod 600 /etc/wpa_supplicant/wpa_supplicant-wlan1.conf
     
