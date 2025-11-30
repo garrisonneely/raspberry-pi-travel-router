@@ -986,7 +986,7 @@ EOF
     if systemctl list-unit-files | grep -q "^dhcpcd.service"; then
         if systemctl is-active --quiet dhcpcd; then
             log_info "Restarting dhcpcd..."
-            systemctl restart dhcpcd
+            systemctl --no-ask-password restart dhcpcd
             sleep 3
         fi
     fi
@@ -999,11 +999,11 @@ EOF
     sleep 2
     
     log_info "Starting hostapd..."
-    systemctl restart hostapd
+    systemctl --no-ask-password restart hostapd
     sleep 3
     
     log_info "Starting dnsmasq..."
-    systemctl restart dnsmasq
+    systemctl --no-ask-password restart dnsmasq
     sleep 2
     
     # Check if wlan1 exists, if not try to load the driver
@@ -1039,7 +1039,7 @@ EOF
     sleep 2
     
     log_info "Starting wpa_supplicant for wlan1..."
-    systemctl restart wpa_supplicant@wlan1
+    systemctl --no-ask-password restart wpa_supplicant@wlan1
     sleep 5
     
     # Verify wlan1 connection
@@ -1079,7 +1079,7 @@ EOF
     # Stop any dhcpcd service that might interfere
     if systemctl is-active --quiet dhcpcd 2>/dev/null; then
         log_info "Stopping dhcpcd service (will use manual dhcpcd for wlan1)..."
-        systemctl stop dhcpcd
+        systemctl --no-ask-password stop dhcpcd
         sleep 2
     fi
     
@@ -1151,7 +1151,7 @@ EOF
     fi
     
     log_info "Starting OpenVPN..."
-    systemctl restart openvpn@nordvpn
+    systemctl --no-ask-password restart openvpn@nordvpn
     sleep 10
     
     # Verify VPN tunnel is up (CRITICAL)
