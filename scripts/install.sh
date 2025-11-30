@@ -1321,22 +1321,30 @@ phase12_verification() {
     # Try multiple paths to find the health check script
     HEALTH_CHECK_FOUND=false
     
-    # Path 1: Same directory as install script
-    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    if [ -f "$SCRIPT_DIR/router-health.sh" ]; then
-        bash "$SCRIPT_DIR/router-health.sh"
-        HEALTH_CHECK_FOUND=true
+    # Path 1: Same directory as install script (use absolute path resolution)
+    if [ -n "${BASH_SOURCE[0]}" ]; then
+        SCRIPT_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || realpath "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")"
+        if [ -f "$SCRIPT_DIR/router-health.sh" ]; then
+            bash "$SCRIPT_DIR/router-health.sh"
+            HEALTH_CHECK_FOUND=true
+        fi
+    fi
+    
     # Path 2: scripts directory relative to current directory
-    elif [ -f "./scripts/router-health.sh" ]; then
+    if [ "$HEALTH_CHECK_FOUND" = false ] && [ -f "./scripts/router-health.sh" ]; then
         bash "./scripts/router-health.sh"
         HEALTH_CHECK_FOUND=true
-    # Path 3: In repository root
-    elif [ -f "$(pwd)/router-health.sh" ]; then
-        bash "$(pwd)/router-health.sh"
-        HEALTH_CHECK_FOUND=true
-    # Path 4: Look for it anywhere in the repo
-    elif [ -f ~/raspberry-pi-travel-router/scripts/router-health.sh ]; then
+    fi
+    
+    # Path 3: Standard installation path
+    if [ "$HEALTH_CHECK_FOUND" = false ] && [ -f ~/raspberry-pi-travel-router/scripts/router-health.sh ]; then
         bash ~/raspberry-pi-travel-router/scripts/router-health.sh
+        HEALTH_CHECK_FOUND=true
+    fi
+    
+    # Path 4: Look in /root if running as root
+    if [ "$HEALTH_CHECK_FOUND" = false ] && [ -f /root/raspberry-pi-travel-router/scripts/router-health.sh ]; then
+        bash /root/raspberry-pi-travel-router/scripts/router-health.sh
         HEALTH_CHECK_FOUND=true
     fi
     
