@@ -67,17 +67,57 @@ log_success "IP forwarding enabled"
 # 2. Fix NAT rules
 log_info "Step 2: Applying NAT rules for tun0..."
 
+# Show current NAT rules before changes
+log_info "Current NAT rules before changes:"
+iptables -t nat -L POSTROUTING -n -v --line-numbers | head -20
+
 # Remove any existing tun0 MASQUERADE rules to avoid duplicates
-iptables -t nat -D POSTROUTING -o tun0 -j MASQUERADE 2>/dev/null || true
+log_info "Removing any existing tun0 MASQUERADE rules..."
+REMOVE_OUTPUT=$(iptables -t nat -D POSTROUTING -o tun0 -j MASQUERADE 2>&1)
+REMOVE_EXIT=$?
+if [ $REMOVE_EXIT -eq 0 ]; then
+    log_info "Removed existing rule: $REMOVE_OUTPUT"
+else
+    log_info "No existing rule to remove (or error): $REMOVE_OUTPUT"
+fi
 
 # Add NAT rule for VPN tunnel
-iptables -t nat -A POSTROUTING -o tun0 -j MASQUERADE
+log_info "Adding NAT MASQUERADE rule for tun0..."
+ADD_OUTPUT=$(iptables -t nat -A POSTROUTING -o tun0 -j MASQUERADE 2>&1)
+ADD_EXIT=$?
+
+if [ $ADD_EXIT -ne 0 ]; then
+    log_error "Failed to add NAT rule. iptables command failed with exit code: $ADD_EXIT"
+    log_error "Error output: $ADD_OUTPUT"
+    log_error ""
+    log_error "Checking iptables modules..."
+    lsmod | grep -E "ip_tables|nf_nat|iptable_nat|nf_conntrack" || log_error "Required modules not loaded"
+    log_error ""
+    log_error "Checking if iptables-legacy is needed..."
+    which iptables-legacy &>/dev/null && log_info "iptables-legacy available at: $(which iptables-legacy)"
+    exit 1
+fi
+
+log_info "iptables command executed successfully"
 
 # Verify rule was added
-if iptables -t nat -L POSTROUTING -n | grep -q "MASQUERADE.*tun0"; then
-    log_success "NAT rule for tun0 applied"
+log_info "Verifying NAT rule was added..."
+NAT_RULES=$(iptables -t nat -L POSTROUTING -n -v 2>&1)
+echo "$NAT_RULES"
+
+if echo "$NAT_RULES" | grep -q "MASQUERADE.*tun0"; then
+    log_success "NAT rule for tun0 applied successfully"
 else
-    log_error "Failed to apply NAT rule"
+    log_error "NAT rule not found in iptables output"
+    log_error ""
+    log_error "Full NAT table:"
+    iptables -t nat -L -n -v
+    log_error ""
+    log_error "Trying alternative: Check if using nftables instead of iptables..."
+    if command -v nft &>/dev/null; then
+        log_info "nftables detected:"
+        nft list ruleset 2>&1 | head -50
+    fi
     exit 1
 fi
 
